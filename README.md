@@ -58,3 +58,5 @@ Khắc phục sự cố thường gặp
 Kết luận
 - Kiến trúc multi-module phù hợp cho dự án có nhiều thành phần tách biệt (library + ứng dụng).
 - Hiện tại dự án đã được cấu hình để root làm aggregator và Spring Boot parent, các module con kế thừa root, đảm bảo nhất quán và dễ bảo trì.
+
+
