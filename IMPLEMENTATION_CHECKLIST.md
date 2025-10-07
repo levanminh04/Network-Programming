@@ -41,41 +41,159 @@
 
 ---
 
-## 📦 **PHASE 2: SHARED MODULE** (Priority: 🟡 HIGH)
+## 📦 **PHASE 2: SHARED MODULE** (Priority: � CRITICAL - UPDATED)
 
-### **Message Protocol**
-- [ ] Review `shared/MessageProtocol.java`
-- [ ] Define message types for MVP:
-  - `LOGIN_REQUEST`, `LOGIN_RESPONSE`
-  - `REGISTER_REQUEST`, `REGISTER_RESPONSE`
-  - `CREATE_GAME_REQUEST`, `CREATE_GAME_RESPONSE`
-  - `QUICK_MATCH_REQUEST`, `QUICK_MATCH_RESPONSE`
-  - `PLAY_CARD_REQUEST`, `PLAY_CARD_RESPONSE`
-  - `ROUND_COMPLETED`, `GAME_COMPLETED`
-  - `PLAYER_QUIT`, `HEARTBEAT`
-- [ ] Implement serialization/deserialization (JSON)
-- [ ] Add validation logic
-- [ ] Write unit tests for protocol
+> **📚 See Complete Documentation**: `shared/docs/` folder
+> - [SHARED_MODULE_ASSESSMENT.md](shared/docs/SHARED_MODULE_ASSESSMENT.md) - Current state analysis
+> - [SHARED_MODULE_RESTRUCTURE.md](shared/docs/SHARED_MODULE_RESTRUCTURE.md) - Complete implementation plan
+> - [MESSAGE_CATALOG.md](shared/docs/MESSAGE_CATALOG.md) - All 25+ messages with examples
+> - [INTEGRATION_GUIDE.md](shared/docs/INTEGRATION_GUIDE.md) - Backend & Frontend integration
 
-### **Shared Models**
-- [ ] Create `User` model (matches database schema)
-- [ ] Create `Card` model (36 cards)
-- [ ] Create `Game` model
-- [ ] Create `GameRound` model
-- [ ] Create `Session` model
-- [ ] Add toString(), equals(), hashCode() methods
+### **WEEK 1: Critical DTOs (Priority: 🔴 CRITICAL)**
 
-### **Utility Classes**
-- [ ] Card deck utilities (shuffle, deal)
-- [ ] Game score calculation
-- [ ] Winner determination logic
-- [ ] Validation utilities
+#### **Authentication DTOs**
+- [x] LoginRequestDto.java ✅ (exists)
+- [x] LoginSuccessDto.java ✅ (exists)
+- [ ] LoginFailureDto.java 🆕
+- [ ] RegisterRequestDto.java 🆕
+- [ ] RegisterResponseDto.java 🆕
+- [ ] LogoutRequestDto.java 🆕
+- [ ] SessionDto.java 🆕
+
+#### **Match DTOs**
+- [ ] MatchRequestDto.java 🆕
+- [ ] MatchFoundDto.java 🆕
+- [ ] MatchStartDto.java 🆕
+- [ ] MatchCancelDto.java 🆕
+- [ ] OpponentLeftDto.java 🆕
+
+#### **Game DTOs**
+- [x] CardDto.java ✅ (exists, needs 36-card update)
+- [ ] GameDto.java 🆕
+- [ ] GameStateDto.java 🆕
+- [ ] RoundStartDto.java 🆕
+- [ ] RoundRevealDto.java 🆕
+- [ ] PlayCardRequestDto.java 🆕
+- [ ] PlayCardAckDto.java 🆕
+- [ ] PlayCardNackDto.java 🆕
+- [ ] GameResultDto.java 🆕
+- [ ] GameScoreDto.java 🆕
+
+#### **Lobby DTOs**
+- [ ] LobbySnapshotDto.java 🆕
+- [ ] LobbyUpdateDto.java 🆕
+- [ ] PlayerDto.java 🆕
+- [ ] OpponentDto.java 🆕
+- [ ] PlayerStatusDto.java 🆕
+
+#### **Leaderboard DTOs**
+- [ ] LeaderboardRequestDto.java 🆕
+- [ ] LeaderboardResponseDto.java 🆕
+- [ ] LeaderboardEntryDto.java 🆕
+
+#### **System DTOs**
+- [ ] ErrorResponseDto.java 🆕
+- [ ] HeartbeatDto.java 🆕
+- [ ] PingDto.java 🆕
+- [ ] PongDto.java 🆕
+- [ ] SystemStatusDto.java 🆕
+
+### **WEEK 1: Enums & Constants**
+
+#### **Enums**
+- [x] CardSuit.java ✅ (exists - H, D, C, S)
+- [x] GameState.java ✅ (exists)
+- [x] ErrorCode.java ✅ (exists)
+- [ ] CardRank.java 🆕 (A-9 for MVP 36-card deck)
+- [ ] PlayerStatus.java 🆕 (IDLE, IN_QUEUE, IN_GAME, OFFLINE)
+- [ ] MatchResult.java 🆕 (PLAYER1_WIN, PLAYER2_WIN, DRAW, ABANDONED)
+- [ ] RoundPhase.java 🆕 (WAITING, SELECTING, REVEALING, COMPLETED)
+- [ ] GameMode.java 🆕 (QUICK_MATCH, RANKED-DEFERRED, CUSTOM-DEFERRED)
+
+#### **Constants**
+- [ ] GameConstants.java 🆕
+  - DECK_SIZE = 36
+  - TOTAL_ROUNDS = 3
+  - ROUND_TIMEOUT_SECONDS = 10
+  - PLAYERS_PER_GAME = 2
+- [ ] ProtocolConstants.java 🆕
+  - PROTOCOL_VERSION = "1.0.0"
+  - HEARTBEAT_INTERVAL_SECONDS = 30
+  - MAX_MESSAGE_SIZE_BYTES = 1048576
+- [ ] ValidationConstants.java 🆕
+  - MIN_USERNAME_LENGTH = 3
+  - MIN_PASSWORD_LENGTH = 6
+  - USERNAME_PATTERN = "^[a-zA-Z0-9_-]+$"
+- [ ] TimeConstants.java 🆕
+
+### **WEEK 2: Protocol & Utilities**
+
+#### **Protocol Enhancement**
+- [x] MessageEnvelope.java ✅ (exists)
+- [x] MessageType.java ✅ (exists)
+- [ ] ProtocolVersion.java 🆕 (version management)
+- [ ] MessageFactory.java 🆕 (builder helpers)
+- [ ] ErrorInfo.java 🆕 (extract from envelope)
+
+#### **Utilities**
+- [x] JsonUtils.java ✅ (exists)
+- [x] ValidationUtils.java ✅ (exists)
+- [x] IdUtils.java ✅ (exists)
+- [ ] CardUtils.java 🆕 (shuffle, deal, validate 36-card deck)
+- [ ] GameRuleUtils.java 🆕 (winner calculation, score logic)
+- [ ] TimeUtils.java 🆕 (timeout helpers)
+
+### **WEEK 2: Documentation**
+
+- [x] SHARED_MODULE_ASSESSMENT.md ✅ (created)
+- [x] SHARED_MODULE_RESTRUCTURE.md ✅ (created)
+- [x] MESSAGE_CATALOG.md ✅ (created with 25+ message examples)
+- [x] INTEGRATION_GUIDE.md ✅ (created - Backend & Frontend)
+- [ ] DTO_SCHEMAS.md 🆕 (detailed JSON schemas)
+- [ ] CHANGELOG.md 🆕 (version history)
+
+### **WEEK 3: Testing & Frontend Integration**
+
+#### **Testing**
+- [ ] Unit tests for all DTOs (90%+ coverage)
+- [ ] Validation tests
+- [ ] Serialization/deserialization tests
+- [ ] Protocol version compatibility tests
+- [ ] Integration tests with Core & Gateway
+
+#### **Frontend Integration**
+- [ ] Export TypeScript definitions (see INTEGRATION_GUIDE.md)
+- [ ] Create `shared.ts` with all types
+- [ ] Create constants export
+- [ ] Create enum export
+- [ ] Test WebSocket message parsing
+
+### **Alignment Tasks**
+
+#### **Database Schema Alignment**
+- [ ] Update CardDto for 36-card deck (A-9, 4 suits)
+- [ ] Ensure UserDto matches `users` table
+- [ ] Ensure GameDto matches `games` table
+- [ ] Ensure RoundDto matches `game_rounds` table
+- [ ] Ensure SessionDto matches `active_sessions` table
+
+#### **Message Protocol Cleanup**
+- [ ] Move/deprecate MessageProtocol.java from root package
+- [ ] Ensure all MessageType constants follow DOMAIN.ACTION convention
+- [ ] Verify all messages have corresponding DTOs
 
 **Acceptance Criteria:**
-✅ MessageProtocol compiles và passes tests  
-✅ All models match database schema  
+✅ All 27+ DTOs created and tested  
+✅ All enums cover MVP requirements  
+✅ Constants centralized (no magic numbers)  
+✅ 36-card deck properly implemented  
+✅ TypeScript definitions match Java DTOs  
+✅ Documentation complete with examples  
+✅ 90%+ test coverage  
 ✅ Shared JAR builds successfully  
 ✅ No dependencies on core or gateway  
+✅ Frontend successfully parses messages  
+✅ Backend successfully creates/validates messages  
 
 ---
 

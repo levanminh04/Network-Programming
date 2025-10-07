@@ -23,6 +23,9 @@ public enum ErrorCode {
     /** Invalid username or password */
     AUTH_INVALID_CREDENTIALS("AUTH_INVALID_CREDENTIALS", "Invalid username or password"),
     
+    /** User not found */
+    AUTH_USER_NOT_FOUND("AUTH_USER_NOT_FOUND", "User not found"),
+    
     /** User account is locked */
     AUTH_ACCOUNT_LOCKED("AUTH_ACCOUNT_LOCKED", "Account is temporarily locked"),
     
@@ -47,6 +50,9 @@ public enum ErrorCode {
     // ============================================================================
     // VALIDATION ERRORS (VALIDATION_*)
     // ============================================================================
+    
+    /** General validation failed */
+    VALIDATION_FAILED("VALIDATION_FAILED", "Validation failed"),
     
     /** Input data validation failed */
     VALIDATION_INVALID_INPUT("VALIDATION_INVALID_INPUT", "Input validation failed"),

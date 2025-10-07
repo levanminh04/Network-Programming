@@ -3,6 +3,7 @@ package com.n9.shared.protocol;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.n9.shared.constants.ProtocolConstants;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -91,7 +92,7 @@ public final class MessageEnvelope {
         this.userId = userId;
         this.sessionId = sessionId;
         this.matchId = matchId;
-        this.version = version != null ? version : ProtocolVersion.CURRENT;
+        this.version = version != null ? version : ProtocolConstants.PROTOCOL_VERSION;
         this.payload = payload;
         this.error = error;
     }
@@ -137,7 +138,7 @@ public final class MessageEnvelope {
         private String userId;
         private String sessionId;
         private String matchId;
-        private String version = ProtocolVersion.CURRENT;
+        private String version = ProtocolConstants.PROTOCOL_VERSION;
         private JsonNode payload;
         private ErrorInfo error;
         
@@ -327,60 +328,4 @@ public final class MessageEnvelope {
                '}';
     }
     
-    // ============================================================================
-    // INNER CLASSES
-    // ============================================================================
-    
-    /**
-     * Error information structure
-     */
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public static class ErrorInfo {
-        @JsonProperty("code")
-        private final String code;
-        
-        @JsonProperty("message")
-        private final String message;
-        
-        @JsonProperty("details")
-        private final JsonNode details;
-        
-        public ErrorInfo(String code, String message) {
-            this(code, message, null);
-        }
-        
-        public ErrorInfo(String code, String message, JsonNode details) {
-            this.code = Objects.requireNonNull(code, "Error code cannot be null");
-            this.message = Objects.requireNonNull(message, "Error message cannot be null");
-            this.details = details;
-        }
-        
-        public String getCode() { return code; }
-        public String getMessage() { return message; }
-        public JsonNode getDetails() { return details; }
-        
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            ErrorInfo errorInfo = (ErrorInfo) o;
-            return Objects.equals(code, errorInfo.code) &&
-                   Objects.equals(message, errorInfo.message) &&
-                   Objects.equals(details, errorInfo.details);
-        }
-        
-        @Override
-        public int hashCode() {
-            return Objects.hash(code, message, details);
-        }
-        
-        @Override
-        public String toString() {
-            return "ErrorInfo{" +
-                   "code='" + code + '\'' +
-                   ", message='" + message + '\'' +
-                   ", hasDetails=" + (details != null) +
-                   '}';
-        }
-    }
 }

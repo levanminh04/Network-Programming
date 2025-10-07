@@ -4,9 +4,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.n9.shared.model.enums.CardSuit;
 
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Min;
-import javax.validation.constraints.Max;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import java.util.Objects;
 
 /**
@@ -20,6 +20,12 @@ import java.util.Objects;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class CardDto {
+    
+    /** Card ID in database (1-36 for MVP 36-card deck) */
+    @JsonProperty("cardId")
+    @Min(value = 1, message = "Card ID must be at least 1")
+    @Max(value = 36, message = "Card ID cannot exceed 36 (MVP: 36-card deck)")
+    private Integer cardId;
     
     /** Card rank (2, 3, 4, 5, 6, 7, 8, 9, J, Q, K, A) */
     @JsonProperty("rank")
@@ -109,6 +115,9 @@ public class CardDto {
     // ============================================================================
     // ACCESSORS
     // ============================================================================
+    
+    public Integer getCardId() { return cardId; }
+    public void setCardId(Integer cardId) { this.cardId = cardId; }
     
     public String getRank() { return rank; }
     public void setRank(String rank) { 
