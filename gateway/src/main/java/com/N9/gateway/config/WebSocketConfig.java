@@ -1,6 +1,6 @@
 package com.N9.gateway.config;
 
-import com.n9.gateway.handler.AuthenticationHandler;
+import com.N9.gateway.handler.AuthenticationHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
