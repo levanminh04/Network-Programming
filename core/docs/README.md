@@ -21,7 +21,7 @@ Core Module là **trái tim xử lý business logic** của hệ thống Card Ga
 
 ```
 core/
-├── pom.xml                          # Maven configuration
+├── pom.xm[IMPLEMENTATION_CHECKLIST.md](..%2F..%2FIMPLEMENTATION_CHECKLIST.md)l                          # Maven configuration
 ├── docs/                            # Comprehensive documentation
 │   ├── README.md                    # Quick start guide
 │   ├── architecture/
