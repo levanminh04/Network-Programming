@@ -36,43 +36,51 @@ public final class MessageEnvelope {
     
     /** Message type identifier - required for routing */
     @JsonProperty("type")
-    private final String type;
+    private String type;
     
     /** Unique correlation ID for request/response matching - required */
     @JsonProperty("correlationId")
-    private final String correlationId;
+    private String correlationId;
     
     /** Message timestamp in epoch milliseconds - required */
     @JsonProperty("timestamp")
-    private final long timestamp;
+    private long timestamp;
     
     /** User identifier - set after authentication */
     @JsonProperty("userId")
-    private final String userId;
+    private String userId;
     
     /** Session identifier - WebSocket session ID */
     @JsonProperty("sessionId")
-    private final String sessionId;
+    private String sessionId;
     
     /** Match identifier - set during game sessions */
     @JsonProperty("matchId")
-    private final String matchId;
+    private String matchId;
     
     /** Protocol version for compatibility checking */
     @JsonProperty("version")
-    private final String version;
+    private String version;
     
     /** Message-specific data payload */
     @JsonProperty("payload")
-    private final JsonNode payload;
+    private JsonNode payload;
     
     /** Error information if message represents an error */
     @JsonProperty("error")
-    private final ErrorInfo error;
+    private ErrorInfo error;
     
     // ============================================================================
     // CONSTRUCTORS
     // ============================================================================
+    
+    /**
+     * Default constructor (for Jackson deserialization)
+     */
+    public MessageEnvelope() {
+        this.timestamp = System.currentTimeMillis();
+        this.version = ProtocolConstants.PROTOCOL_VERSION;
+    }
     
     /**
      * Full constructor for complete message envelope
@@ -203,14 +211,31 @@ public final class MessageEnvelope {
     // ============================================================================
     
     public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
+    
     public String getCorrelationId() { return correlationId; }
+    public void setCorrelationId(String correlationId) { this.correlationId = correlationId; }
+    
     public long getTimestamp() { return timestamp; }
+    public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+    
     public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
+    
     public String getSessionId() { return sessionId; }
+    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+    
     public String getMatchId() { return matchId; }
+    public void setMatchId(String matchId) { this.matchId = matchId; }
+    
     public String getVersion() { return version; }
+    public void setVersion(String version) { this.version = version; }
+    
     public JsonNode getPayload() { return payload; }
+    public void setPayload(JsonNode payload) { this.payload = payload; }
+    
     public ErrorInfo getError() { return error; }
+    public void setError(ErrorInfo error) { this.error = error; }
     
     // ============================================================================
     // UTILITY METHODS
