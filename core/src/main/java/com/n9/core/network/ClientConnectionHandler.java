@@ -1,4 +1,4 @@
-package network;
+package com.n9.core.network;
 
 import com.n9.core.service.GameService;
 import com.n9.core.service.GameService.GameState;

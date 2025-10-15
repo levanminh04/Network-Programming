@@ -11,7 +11,7 @@ import java.net.Socket;
  * Sử dụng MessageEnvelope và DTOs từ shared module
  * 
  * Usage:
- * 1. Start Core Server: java CoreServer
+ * 1. Start Core Server: java com.n9.core.CoreServer
  * 2. Run: java -cp "target/classes:target/test-classes:..." TestCoreClient
  * 3. Xem kết quả test các message types
  * 

@@ -8,9 +8,9 @@ Tài liệu này phân tích các file code hiện có trong Core module, đánh
 
 ## ✅ 1. Các File Hiện Có & Đánh Giá
 
-### 1.1. CoreServer.java ⭐⭐⭐⭐⭐ (Hoàn chỉnh)
+### 1.1. com.n9.core.CoreServer.java ⭐⭐⭐⭐⭐ (Hoàn chỉnh)
 
-**Vị trí**: `core/src/main/java/CoreServer.java`
+**Vị trí**: `core/src/main/java/com.n9.core.CoreServer.java`
 
 **Chức năng**:
 - Main entry point của Core Server
@@ -27,7 +27,7 @@ Tài liệu này phân tích các file code hiện có trong Core module, đánh
 
 **Code**:
 ```java
-public final class CoreServer {
+public final class com.n9.core.CoreServer {
     public static void main(String[] args) throws Exception {
         int port = 9090;
         var serverSocket = new ServerSocket(port);
@@ -142,7 +142,7 @@ int roundWinner = GameRuleUtils.getRoundWinner(player1Card, player2Card);
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│                     CoreServer (Main)                       │
+│                     com.n9.core.CoreServer (Main)                       │
 │  - Tạo ServerSocket (port 9090)                            │
 │  - Tạo ExecutorService (thread pool)                       │
 │  - Tạo GameService (singleton)                             │
@@ -235,7 +235,7 @@ Gateway                     Core Server
 
 ### 3.1. Core Module ✅ (Hoàn thành)
 
-- [x] CoreServer khởi động thành công
+- [x] com.n9.core.CoreServer khởi động thành công
 - [x] CoreServerListener accept connections
 - [x] ClientConnectionHandler parse MessageEnvelope
 - [x] ClientConnectionHandler sử dụng MessageType constants
@@ -277,10 +277,10 @@ mvn clean compile
 
 ```bash
 # Option 1: Maven exec
-mvn exec:java -Dexec.mainClass="CoreServer"
+mvn exec:java -Dexec.mainClass="com.n9.core.CoreServer"
 
 # Option 2: Java command
-java -cp "target/classes:../shared/target/classes" CoreServer
+java -cp "target/classes:../shared/target/classes" com.n9.core.CoreServer
 ```
 
 **Output mong đợi**:
@@ -369,7 +369,7 @@ game.round.timeout=10
 ```
 
 ```java
-// CoreServer.java
+// com.n9.core.CoreServer.java
 Properties props = new Properties();
 props.load(new FileInputStream("core.properties"));
 int port = Integer.parseInt(props.getProperty("server.port", "9090"));
@@ -424,7 +424,7 @@ public class ServerMetrics {
 
 | File | Status | Mô tả |
 |------|--------|-------|
-| `CoreServer.java` | ✅ Production-ready | Main entry point |
+| `com.n9.core.CoreServer.java` | ✅ Production-ready | Main entry point |
 | `CoreServerListener.java` | ✅ Production-ready | Accept loop |
 | `GameService.java` | ✅ Production-ready | Business logic |
 | `ClientConnectionHandler.java` | ✅ Production-ready | Message handler |
