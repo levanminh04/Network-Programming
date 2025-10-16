@@ -18,11 +18,12 @@ public class CoreServerListener implements Runnable {
     }
 
     public void start() {
-        new Thread(this, "accept-loop").start();
+        new Thread(this, "accept-loop").start();   // start() được gọi ở đây, ngay lập tức nó sẽ gọi this.run(), this ở  đây chính là CoreServerListener
     }
 
     @Override public void run() {
-        while (running && !serverSocket.isClosed()) {
+        // Luồng "accept-loop" được tạo ra với một mục đích duy nhất: chạy vòng lặp while vô tận để liên tục chờ đợi và chấp nhận các kết nối mới.
+        while (running && !serverSocket.isClosed()) {    // vòng while này sẽ chạy vô tận trong thread "accept-loop"
             try {
                 Socket s = serverSocket.accept();
                 s.setSoTimeout(30000); // 30s

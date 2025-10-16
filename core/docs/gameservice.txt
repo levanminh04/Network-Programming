@@ -1,0 +1,87 @@
+Chính xác\! Bạn đã đặt ra câu hỏi then chốt để hiểu về thiết kế của một hệ thống đa luồng. Với `GameService` bạn đã cung cấp, câu trả lời nằm ở một cấu trúc dữ liệu trung tâm.
+
+Các player **không tìm đến nhau một cách trực tiếp**. Thay vào đó, chúng **cùng tìm đến một "bàn cờ" chung** được định danh bởi một mã trận đấu (`matchId`).
+
+-----
+
+### \#\# "Bàn Cờ" Trung Tâm: `activeGames`
+
+Trái tim của toàn bộ `GameService` và là nơi các luồng "gặp nhau" chính là dòng này:
+
+```java
+private final Map<String, GameState> activeGames = new ConcurrentHashMap<>();
+```
+
+Đây là "danh bạ" mà chúng ta đã nói đến, nhưng nó không quản lý các luồng, mà quản lý các **trạng thái trận đấu**.
+
+  * **`Map<String, GameState>`**: Đây là một bản đồ, trong đó:
+      * **Chìa khóa (`String`)**: Là `matchId` duy nhất cho mỗi trận đấu.
+      * **Giá trị (`GameState`)**: Là một đối tượng chứa **toàn bộ** thông tin về trận đấu đó: ID của 2 người chơi, bài trên tay của cả hai, điểm số, vòng đấu hiện tại, v.v.
+  * **`ConcurrentHashMap`**: Đây là một loại `Map` đặc biệt, được thiết kế để an toàn khi nhiều luồng cùng truy cập và sửa đổi nó một lúc. Nó ngăn chặn các lỗi có thể xảy ra khi luồng của Player A và luồng của Player B cùng lúc cập nhật điểm số.
+
+-----
+
+### \#\# Hãy Tưởng Tượng Bằng Một Ví Dụ: Bàn Cờ Chung ♟️
+
+1.  **`GameService`** của bạn là người quản lý một câu lạc bộ cờ.
+2.  **`activeGames`** là căn phòng chứa rất nhiều bàn cờ.
+3.  Mỗi **`matchId`** là số hiệu được ghi trên mỗi bàn cờ (ví dụ: Bàn \#123, Bàn \#456).
+4.  Mỗi đối tượng **`GameState`** chính là bàn cờ, quân cờ, và tờ giấy ghi điểm đặt trên bàn đó.
+5.  **Luồng của Player A** và **luồng của Player B** là hai người chơi.
+
+Khi một trận đấu bắt đầu:
+
+  * Người quản lý (`GameService`) lấy một bàn cờ mới (`new GameState(...)`), dán số hiệu `match_123` lên đó, và đặt vào phòng (`activeGames.put(...)`).
+  * Người quản lý nói với cả hai người chơi: "Hai bạn hãy đến Bàn \#123 để thi đấu".
+
+Bây giờ, khi Player A muốn đi một nước cờ:
+
+  * Luồng của Player A không đi tìm Player B.
+  * Nó đi đến phòng `activeGames`, tìm đến **Bàn \#123** (`activeGames.get("match_123")`).
+  * Nó di chuyển một quân cờ trên bàn cờ (`GameState`) đó.
+
+Khi Player B muốn xem đối thủ đã đi đâu:
+
+  * Luồng của Player B cũng đi đến phòng `activeGames`, tìm đến **Bàn \#123**.
+  * Nó nhìn vào bàn cờ (`GameState`) và thấy nước đi mới của Player A.
+
+Cả hai luồng không bao giờ tương tác trực tiếp. Chúng tương tác gián tiếp thông qua một đối tượng chung là `GameState`.
+
+-----
+
+### \#\# Ánh Xạ Vào Code Của Bạn
+
+Hãy xem luồng hoạt động khi Player A đánh một lá bài:
+
+1.  **Hành động của Player A**: Client của Player A gửi một tin nhắn `GAME_CARD_PLAY_REQUEST` chứa `matchId="match_123"`, `playerId="player_A"` và `cardId=25`.
+
+2.  **`ClientConnectionHandler` của Player A** nhận tin nhắn này. Nó gọi:
+
+    ```java
+    gameService.playCard("match_123", "player_A", 25);
+    ```
+
+3.  **Bên trong phương thức `playCard`**:
+
+      * `GameState game = activeGames.get("match_123");`
+          * // Dịch: *Tìm đến Bàn cờ \#123.*
+      * `hand = game.getPlayer1Hand();`
+          * // Dịch: *Nhìn vào phần bài của Player 1 trên bàn cờ.*
+      * `CardUtils.removeCard(hand, 25);`
+          * // Dịch: *Bỏ lá bài 25 ra khỏi tay Player 1 trên bàn cờ.*
+
+**Vậy làm sao Player B biết được điều này?**
+
+Trong mô hình hiện tại của bạn (request-response), Player B sẽ không biết ngay lập tức. Luồng của Player B sẽ biết khi:
+
+  * **Đến lượt Player B**: Luồng của B cũng thực hiện một hành động (ví dụ `playCard`).
+  * **Hoặc khi kết thúc round**: Server sẽ cần một logic để gửi thông báo kết quả round đấu (`RoundRevealDto`) cho **cả hai client**. Điều này có nghĩa là luồng phục vụ Player A sau khi tính toán xong kết quả round, sẽ cần một cách để "đẩy" tin nhắn đến `Socket` của Player B. (Đây là một bước nâng cao hơn, hiện tại logic của bạn đang xử lý đồng bộ).
+
+### \#\# Tóm Tắt
+
+  * Các player "tìm thấy nhau" thông qua **một `matchId` chung**.
+  * Cả hai luồng (`ClientConnectionHandler`) của họ đều truy cập vào **cùng một đối tượng `GameState`** được lưu trong `Map activeGames`.
+  * `GameState` đóng vai trò là **vùng nhớ chia sẻ (shared state)**, là "sự thật duy nhất" về trận đấu.
+  * Việc sử dụng `ConcurrentHashMap` đảm bảo rằng việc truy cập vào "danh bạ các bàn cờ" này là an toàn trong môi trường đa luồng.
+
+Thiết kế này rất hiệu quả vì nó tách biệt hoàn toàn các luồng xử lý kết nối khỏi logic của game, giúp hệ thống dễ quản lý và mở rộng.
