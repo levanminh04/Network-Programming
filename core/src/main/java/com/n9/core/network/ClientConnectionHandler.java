@@ -1,80 +1,98 @@
 package com.n9.core.network;
 
+import com.n9.core.service.AuthService;
 import com.n9.core.service.GameService;
-import com.n9.core.service.GameService.GameState;
-import com.n9.shared.model.dto.game.*;
+import com.n9.core.service.SessionManager;
+import com.n9.shared.model.dto.game.CardDto;
+import com.n9.shared.model.dto.game.PlayCardAckDto;
+import com.n9.shared.model.dto.game.PlayCardRequestDto;
 import com.n9.shared.model.dto.match.MatchStartDto;
-import com.n9.shared.model.enums.ErrorCode;
-import com.n9.shared.protocol.*;
+import com.n9.shared.protocol.ErrorInfo;
+import com.n9.shared.protocol.MessageEnvelope;
+import com.n9.shared.protocol.MessageFactory;
+import com.n9.shared.MessageProtocol;
 import com.n9.shared.util.JsonUtils;
-
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 
 /**
- * ClientConnectionHandler - Xử lý một TCP connection từ Gateway
- * 
- * Tận dụng shared module:
- * - MessageEnvelope: Wrapper chuẩn cho mọi message
- * - MessageFactory: Tạo request/response theo chuẩn
- * - MessageType: Định nghĩa các loại message
- * - DTOs: PlayCardRequestDto, RoundRevealDto, CardDto...
- * 
- * Message Flow:
- * Gateway -> Core: GAME.START (init game), GAME.CARD_PLAY_REQUEST
- * Core -> Gateway: GAME.CARD_PLAY_ACK, GAME.ROUND_REVEAL
- * 
- * @version 1.0.0 (MVP)
+ * ClientConnectionHandler - Xử lý một kết nối TCP từ client.
+ * Đóng vai trò là bộ định tuyến chính (Main Router), nhận tất cả các tin nhắn,
+ * xác thực session, và ủy quyền cho các service tương ứng xử lý.
+ *
+ * @version 1.1.0 (Refactored for MVP)
  */
 public class ClientConnectionHandler implements Runnable {
+
     private final Socket socket;
     private final GameService gameService;
+    private final AuthService authService;
+    private final SessionManager sessionManager;
 
-    // Connection state
     private BufferedReader reader;
     private BufferedWriter writer;
-    
-    public ClientConnectionHandler(Socket socket, GameService gameService) {
+
+    /**
+     * Constructor đã được cập nhật để nhận tất cả các service cần thiết.
+     */
+    public ClientConnectionHandler(
+            Socket socket,
+            GameService gameService,
+            AuthService authService,
+            SessionManager sessionManager
+    ) {
         this.socket = socket;
         this.gameService = gameService;
+        this.authService = authService;
+        this.sessionManager = sessionManager;
     }
 
     @Override
     public void run() {
         String clientAddress = socket.getRemoteSocketAddress().toString();
         System.out.println("✅ New connection from: " + clientAddress);
-        
+
         try {
-            reader = new BufferedReader(
-                new InputStreamReader(socket.getInputStream(), "UTF-8")
-            );
-            writer = new BufferedWriter(
-                new OutputStreamWriter(socket.getOutputStream(), "UTF-8")
-            );
+            reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
+            writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"));
 
             String line;
             while ((line = reader.readLine()) != null) {
-                System.out.println("📨 Received from " + clientAddress + ": " + 
-                    line.substring(0, Math.min(100, line.length())));
-                
-                String response = handleMessage(line);
-                
-                writer.write(response);
-                writer.newLine();
-                writer.flush();
-                
-                System.out.println("📤 Sent to " + clientAddress + ": " + 
-                    response.substring(0, Math.min(100, response.length())));
+                System.out.println("📨 Received: " + line.substring(0, Math.min(100, line.length())));
+
+                MessageEnvelope request = null;
+                MessageEnvelope response;
+                try {
+                    request = JsonUtils.fromJson(line, MessageEnvelope.class);
+                    if (request == null) {
+                        // Tạo lỗi thủ công nếu JSON không hợp lệ
+                        response = new MessageEnvelope(MessageProtocol.Type.SYSTEM_ERROR, "unknown", null);
+                        response.setError(new ErrorInfo("INVALID_JSON", "Invalid JSON format received."));
+                    } else {
+                        response = handleMessage(request);
+                    }
+                } catch (Exception e) {
+                    System.err.println("❌ Unhandled error processing message: " + e.getMessage());
+                    e.printStackTrace();
+                    response = MessageFactory.createErrorResponse(request, "INTERNAL_SERVER_ERROR", "An unexpected error occurred.");
+                }
+
+                String jsonResponse = JsonUtils.toJson(response);
+                sendMessage(jsonResponse);
+                System.out.println("📤 Sent: " + jsonResponse.substring(0, Math.min(100, jsonResponse.length())));
             }
-            
         } catch (SocketTimeoutException e) {
             System.err.println("⏱️ Timeout from " + clientAddress);
-            // TODO: Implement auto-pick logic for timeout
         } catch (IOException e) {
+            // Lỗi này thường xảy ra khi client ngắt kết nối đột ngột, không cần in stack trace
             System.err.println("❌ Connection error from " + clientAddress + ": " + e.getMessage());
         } catch (Exception e) {
-            System.err.println("❌ Unexpected error from " + clientAddress);
+            System.err.println("❌ Unexpected error in run loop: " + clientAddress);
             e.printStackTrace();
         } finally {
             cleanup(clientAddress);
@@ -82,226 +100,170 @@ public class ClientConnectionHandler implements Runnable {
     }
 
     /**
-     * Handle incoming message and route to appropriate handler
-     * Sử dụng MessageEnvelope từ shared module
+     * Bộ định tuyến chính, nhận MessageEnvelope và gọi handler tương ứng.
      */
-    private String handleMessage(String jsonLine) {
-        try {
-            // Parse message envelope
-            MessageEnvelope envelope = JsonUtils.fromJson(jsonLine, MessageEnvelope.class);
-            if (envelope == null) {
-                return createErrorResponse(null, "Invalid JSON format");
-            }
-            
-            String type = envelope.getType();
-            String correlationId = envelope.getCorrelationId();
-            
-            // Route based on message type
-            switch (type) {
-                case MessageType.GAME_START:
-                    return handleGameStart(envelope);
-                    
-                case MessageType.GAME_CARD_PLAY_REQUEST:
-                    return handlePlayCard(envelope);
-                    
-                case MessageType.GAME_STATE_SYNC:
-                    return handleGameState(envelope);
-                    
-                default:
-                    return createErrorResponse(correlationId, "Unknown message type: " + type);
-            }
-            
-        } catch (Exception e) {
-            System.err.println("❌ Error handling message: " + e.getMessage());
-            e.printStackTrace();
-            return createErrorResponse(null, "Server error: " + e.getMessage());
+    private MessageEnvelope handleMessage(MessageEnvelope envelope) {
+        String type = envelope.getType();
+
+        switch (type) {
+            // ========== AUTH DOMAIN (Dành cho Lập trình viên A) ==========
+            case MessageProtocol.Type.AUTH_REGISTER_REQUEST:
+                return handleRegister(envelope);
+            case MessageProtocol.Type.AUTH_LOGIN_REQUEST:
+                return handleLogin(envelope);
+            case MessageProtocol.Type.AUTH_LOGOUT_REQUEST:
+                return handleLogout(envelope);
+
+            // ========== LOBBY DOMAIN (Dành cho Lập trình viên B) ==========
+            case MessageProtocol.Type.LOBBY_MATCH_REQUEST:
+                return handleMatchRequest(envelope);
+
+            // ========== GAME DOMAIN (Ví dụ đã refactor) ==========
+            case MessageProtocol.Type.GAME_START:
+                return handleGameStart(envelope);
+            case MessageProtocol.Type.GAME_CARD_PLAY_REQUEST:
+                return handlePlayCard(envelope);
+
+            default:
+                return MessageFactory.createErrorResponse(envelope, "UNKNOWN_TYPE", "Unknown message type: " + type);
         }
     }
 
-    /**
-     * Handle GAME.START request - Initialize new game
-     * 
-     * Request payload: MatchStartDto {matchId, gameId, playerPosition...}
-     * Response: GAME.CARD_PLAY_ACK with player's hand
-     */
-    private String handleGameStart(MessageEnvelope envelope) {
+    // ============================================================================
+    // AUTH HANDLERS (PLACEHOLDERS CHO LẬP TRÌNH VIÊN A)
+    // ============================================================================
+
+    private MessageEnvelope handleRegister(MessageEnvelope envelope) {
+        // TODO: Lập trình viên A triển khai logic này.
+        // Gợi ý:
+        // 1. Parse payload thành RegisterRequestDto.
+        // 2. Gọi authService.register(...).
+        // 3. Nếu thành công, gọi sessionManager.createSession(...).
+        // 4. Tạo response thành công với sessionId và thông tin user.
+        // 5. Bắt exception và tạo response lỗi nếu có.
+        return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Register functionality is not yet implemented.");
+    }
+
+    private MessageEnvelope handleLogin(MessageEnvelope envelope) {
+        // TODO: Lập trình viên A triển khai logic này.
+        return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Login functionality is not yet implemented.");
+    }
+
+    private MessageEnvelope handleLogout(MessageEnvelope envelope) {
+        // TODO: Lập trình viên A triển khai logic này.
+        return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Logout functionality is not yet implemented.");
+    }
+
+    // ============================================================================
+    // LOBBY HANDLERS (PLACEHOLDERS CHO LẬP TRÌNH VIÊN B)
+    // ============================================================================
+
+    private MessageEnvelope handleMatchRequest(MessageEnvelope envelope) {
+        // TODO: Lập trình viên B triển khai logic này.
+        // Gợi ý:
+        // 1. Xác thực session bằng sessionManager.getSession(...).
+        // 2. Lấy userId từ context.
+        // 3. Gọi matchmakingService.requestMatch(userId).
+        // 4. Trả về một response xác nhận đã vào hàng đợi.
+        return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Matchmaking functionality is not yet implemented.");
+    }
+
+    // ============================================================================
+    // GAME HANDLERS (VÍ DỤ ĐÃ REFACTOR)
+    // ============================================================================
+
+    private MessageEnvelope handleGameStart(MessageEnvelope envelope) {
+        // Bước 1: Mọi handler cần xác thực đều phải kiểm tra session trước tiên.
+        SessionManager.SessionContext context = sessionManager.getSession(envelope.getSessionId());
+        if (context == null) {
+            return MessageFactory.createErrorResponse(envelope, "AUTH_REQUIRED", "Invalid or missing session.");
+        }
+        String playerId = context.getUserId();
+
         try {
-            // Parse request payload
-            MatchStartDto startDto = JsonUtils.getObjectMapper().convertValue(
-                envelope.getPayload(), 
-                MatchStartDto.class
-            );
-            
-            // Validate
-            if (startDto.getMatchId() == null) {
-                return createErrorResponse(envelope.getCorrelationId(), 
-                    "Missing matchId in GAME.START");
-            }
-            
-            // Extract player IDs from envelope
-            String player1Id = envelope.getUserId(); // Current player
+            // Bước 2: Parse payload.
+            MatchStartDto startDto = JsonUtils.getObjectMapper().convertValue(envelope.getPayload(), MatchStartDto.class);
             String matchId = startDto.getMatchId();
-            
-            // Note: Trong MVP, Gateway sẽ gọi 2 lần với player1 và player2
-            // Hoặc cần có thêm field player2Id trong MatchStartDto
-            
-            // Initialize game (hoặc retrieve nếu đã init)
-            GameState game = gameService.getGameState(matchId);
-            if (game == null) {
-                // Cần có cả 2 player IDs để init
-                // Tạm thời throw error, Gateway cần gửi đầy đủ thông tin
-                return createErrorResponse(envelope.getCorrelationId(),
-                    "Game not initialized. Need both player IDs.");
+
+            if (matchId == null) {
+                return MessageFactory.createErrorResponse(envelope, "VALIDATION_ERROR", "Missing matchId in payload.");
             }
-            
-            // Get player's hand
-            java.util.List<CardDto> playerHand = gameService.getPlayerHand(matchId, player1Id);
-            
-            // Create response - ACK that player received their cards
-            PlayCardAckDto ackDto = new PlayCardAckDto();
-            ackDto.setGameId(matchId);
-            ackDto.setRoundNumber(game.getCurrentRound());
-            ackDto.setCardId(null); // No specific card yet
-            ackDto.setWaitingForOpponent(false);
-            
-            MessageEnvelope response = MessageFactory.createResponse(
-                MessageType.GAME_CARD_PLAY_ACK,
-                envelope.getCorrelationId(),
-                ackDto
-            );
-            
-            System.out.println("🎮 Game started for player: " + player1Id + " in match: " + matchId);
-            
-            return JsonUtils.toJson(response);
-            
+
+            // Bước 3: Gọi service để xử lý logic.
+            GameService.GameState game = gameService.getGameState(matchId);
+            if (game == null) {
+                return MessageFactory.createErrorResponse(envelope, "GAME_NOT_FOUND", "Game not found or not initialized.");
+            }
+
+            // ... (Logic lấy bài, v.v...)
+            Object responsePayload = new Object(); // Thay thế bằng DTO response thực tế
+
+            // Bước 4: Tạo và trả về response thành công.
+            return MessageFactory.createResponse(envelope, MessageProtocol.Type.GAME_START, responsePayload);
+
         } catch (Exception e) {
-            System.err.println("❌ Error starting game: " + e.getMessage());
-            return createErrorResponse(envelope.getCorrelationId(), 
-                "Failed to start game: " + e.getMessage());
+            System.err.println("❌ Error in handleGameStart: " + e.getMessage());
+            return MessageFactory.createErrorResponse(envelope, "INTERNAL_SERVER_ERROR", "Failed to start game.");
         }
     }
 
-    /**
-     * Handle GAME.CARD_PLAY_REQUEST - Player plays a card
-     * 
-     * Request payload: PlayCardRequestDto {gameId, cardId, isAutoPick...}
-     * Response: GAME.CARD_PLAY_ACK with played card info
-     */
-    private String handlePlayCard(MessageEnvelope envelope) {
+    private MessageEnvelope handlePlayCard(MessageEnvelope envelope) {
+        SessionManager.SessionContext context = sessionManager.getSession(envelope.getSessionId());
+        if (context == null) {
+            return MessageFactory.createErrorResponse(envelope, "AUTH_REQUIRED", "Invalid or missing session.");
+        }
+        String playerId = context.getUserId();
+
         try {
-            // Parse request
-            PlayCardRequestDto request = JsonUtils.getObjectMapper().convertValue(
-                envelope.getPayload(),
-                PlayCardRequestDto.class
-            );
-            
-            // Validate
-            if (request.getGameId() == null || envelope.getUserId() == null) {
-                return createErrorResponse(envelope.getCorrelationId(),
-                    "Missing gameId or userId");
-            }
-            
+            PlayCardRequestDto request = JsonUtils.getObjectMapper().convertValue(envelope.getPayload(), PlayCardRequestDto.class);
             String matchId = request.getGameId();
-            String playerId = envelope.getUserId();
-            
-            // Play card (không có auto-pick trong PlayCardRequestDto hiện tại)
+
+            if (matchId == null) {
+                return MessageFactory.createErrorResponse(envelope, "VALIDATION_ERROR", "Missing gameId in payload.");
+            }
+
             CardDto playedCard = gameService.playCard(matchId, playerId, request.getCardId());
-            System.out.println("🃏 Player " + playerId + " played: " + 
-                gameService.formatCard(playedCard));
-            
-            // Create ACK response
+            System.out.println("🃏 Player " + playerId + " played a card in match " + matchId);
+
             PlayCardAckDto ackDto = new PlayCardAckDto();
             ackDto.setGameId(matchId);
-            ackDto.setRoundNumber(request.getRoundNumber());
             ackDto.setCardId(playedCard.getCardId());
-            ackDto.setWaitingForOpponent(true);
-            
-            MessageEnvelope response = MessageFactory.createResponse(
-                MessageType.GAME_CARD_PLAY_ACK,
-                envelope.getCorrelationId(),
-                ackDto
-            );
-            
-            return JsonUtils.toJson(response);
-            
+            //...
+
+            return MessageFactory.createResponse(envelope, MessageProtocol.Type.GAME_CARD_PLAY_SUCCESS, ackDto);
+
         } catch (IllegalArgumentException e) {
             System.err.println("⚠️ Invalid card play: " + e.getMessage());
-            return createErrorResponse(envelope.getCorrelationId(), e.getMessage());
+            return MessageFactory.createErrorResponse(envelope, "INVALID_PLAY", e.getMessage());
         } catch (Exception e) {
-            System.err.println("❌ Error playing card: " + e.getMessage());
-            return createErrorResponse(envelope.getCorrelationId(), 
-                "Failed to play card: " + e.getMessage());
+            System.err.println("❌ Error in handlePlayCard: " + e.getMessage());
+            return MessageFactory.createErrorResponse(envelope, "INTERNAL_SERVER_ERROR", "Failed to play card.");
         }
     }
 
+    // ============================================================================
+    // UTILITY METHODS
+    // ============================================================================
+
     /**
-     * Handle GAME.STATE_SYNC - Get current game state
-     * 
-     * Response: Current round, scores, player's remaining hand
+     * Gửi một tin nhắn đến client một cách an toàn (thread-safe).
+     * Được gọi bởi các service khác (ví dụ: MatchmakingService) để đẩy thông báo.
+     * @param jsonMessage Tin nhắn đã được serialize thành chuỗi JSON.
      */
-    private String handleGameState(MessageEnvelope envelope) {
+    public synchronized void sendMessage(String jsonMessage) {
         try {
-            String matchId = envelope.getMatchId();
-            String playerId = envelope.getUserId();
-            
-            // Validate
-            if (matchId == null || playerId == null) {
-                return createErrorResponse(envelope.getCorrelationId(),
-                    "Missing matchId or userId");
+            if (writer != null && !socket.isClosed()) {
+                writer.write(jsonMessage);
+                writer.newLine();
+                writer.flush();
             }
-            
-            // Get game state
-            GameState game = gameService.getGameState(matchId);
-            if (game == null) {
-                return createErrorResponse(envelope.getCorrelationId(),
-                    "Game not found: " + matchId);
-            }
-            
-            // Determine player perspective
-            boolean isPlayer1 = playerId.equals(game.getPlayer1Id());
-            
-            // Build response using RoundStartDto
-            RoundStartDto stateDto = new RoundStartDto();
-            stateDto.setGameId(matchId);
-            stateDto.setRoundNumber(game.getCurrentRound());
-            stateDto.setPlayerScore(isPlayer1 ? game.getPlayer1Score() : game.getPlayer2Score());
-            stateDto.setOpponentScore(isPlayer1 ? game.getPlayer2Score() : game.getPlayer1Score());
-            stateDto.setHand(isPlayer1 ? game.getPlayer1Hand() : game.getPlayer2Hand());
-            
-            MessageEnvelope response = MessageFactory.createResponse(
-                MessageType.GAME_ROUND_START,
-                envelope.getCorrelationId(),
-                stateDto
-            );
-            
-            return JsonUtils.toJson(response);
-            
-        } catch (Exception e) {
-            System.err.println("❌ Error getting game state: " + e.getMessage());
-            return createErrorResponse(envelope.getCorrelationId(),
-                "Failed to get game state: " + e.getMessage());
+        } catch (IOException e) {
+            System.err.println("❌ Failed to send message to " + socket.getRemoteSocketAddress() + ": " + e.getMessage());
         }
     }
 
     /**
-     * Create error response using shared protocol
-     */
-    private String createErrorResponse(String correlationId, String errorMessage) {
-        try {
-            MessageEnvelope errorEnvelope = MessageFactory.createError(
-                correlationId != null ? correlationId : "unknown",
-                ErrorCode.SYSTEM_INTERNAL_ERROR,
-                errorMessage
-            );
-            return JsonUtils.toJson(errorEnvelope);
-        } catch (Exception e) {
-            // Fallback to simple JSON if MessageFactory fails
-            return "{\"type\":\"SYSTEM.ERROR\",\"error\":{\"message\":\"" + errorMessage + "\"}}";
-        }
-    }
-
-    /**
-     * Cleanup resources when connection closes
+     * Dọn dẹp tài nguyên khi kết nối bị đóng.
      */
     private void cleanup(String clientAddress) {
         try {

@@ -378,44 +378,46 @@ private void simulateClientConnection(int messageCount) {
 ### **1. API Documentation**
 
 ```java
+import com.n9.shared.MessageProtocol;
+
 /**
  * WebSocket Message API Documentation
- * 
+ *
  * This service handles real-time communication between game clients and the core server.
  * All messages follow a standard JSON envelope format for consistency.
- * 
+ *
  * @apiNote WebSocket Endpoint: /ws/game
  * @apiNote Supported Protocols: WebSocket, SockJS
  * @apiNote Authentication: JWT token required
- * 
+ *
  * @example Connection Example:
  * <pre>
  * const socket = new WebSocket('ws://localhost:8080/ws/game?token=jwt_token_here');
- * 
+ *
  * socket.onopen = function(event) {
  *     console.log('Connected to game server');
  * };
- * 
+ *
  * socket.onmessage = function(event) {
  *     const message = JSON.parse(event.data);
  *     handleGameMessage(message);
  * };
  * </pre>
- * 
+ *
  * @see MessageProtocol for complete message type definitions
  * @see GatewaySecurityConfig for authentication requirements
  */
 @RestController
 @Tag(name = "WebSocket API", description = "Real-time game communication")
 public class WebSocketDocumentationController {
-    
+
     /**
      * Authentication Message Example
-     * 
+     *
      * @apiNote Message Type: AUTH.LOGIN_REQUEST
      * @apiNote Required Fields: username, password
      * @apiNote Response: AUTH.LOGIN_SUCCESS or AUTH.LOGIN_FAILURE
-     * 
+     *
      * @example Request:
      * <pre>
      * {
@@ -428,7 +430,7 @@ public class WebSocketDocumentationController {
      *   }
      * }
      * </pre>
-     * 
+     *
      * @example Success Response:
      * <pre>
      * {
@@ -443,7 +445,8 @@ public class WebSocketDocumentationController {
      * }
      * </pre>
      */
-    public void loginExample() {}
+    public void loginExample() {
+    }
 }
 ```
 

@@ -12,7 +12,7 @@
 
 ```
 shared/src/main/java/
-├── MessageProtocol.java (ROOT - ❌ SAI VỊ TRÍ)
+├── com.n9.shared.MessageProtocol.java (ROOT - ❌ SAI VỊ TRÍ)
 └── com/n9/shared/
     ├── model/
     │   ├── dto/
@@ -138,14 +138,14 @@ shared/src/main/java/
 
 #### ❌ **GAP 5: File organization**
 
-**❌ MessageProtocol.java ở sai vị trí**:
+**❌ com.n9.shared.MessageProtocol.java ở sai vị trí**:
 ```
-shared/src/main/java/MessageProtocol.java  ❌ ROOT PACKAGE
+shared/src/main/java/com.n9.shared.MessageProtocol.java  ❌ ROOT PACKAGE
 ```
 
 **Nên là**:
 ```
-shared/src/main/java/com/n9/shared/protocol/MessageProtocol.java
+shared/src/main/java/com/n9/shared/protocol/com.n9.shared.MessageProtocol.java
 ```
 
 **Hoặc deprecate** vì đã có `MessageType.java` tốt hơn.
@@ -215,7 +215,7 @@ shared/src/main/java/com/n9/shared/protocol/MessageProtocol.java
    - [ ] GameConstants
    - [ ] ProtocolConstants
 
-4. **Di chuyển MessageProtocol.java** vào đúng package hoặc deprecate
+4. **Di chuyển com.n9.shared.MessageProtocol.java** vào đúng package hoặc deprecate
 
 ---
 
