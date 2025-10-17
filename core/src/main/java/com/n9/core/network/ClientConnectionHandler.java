@@ -10,7 +10,7 @@ import com.n9.shared.model.dto.match.MatchStartDto;
 import com.n9.shared.protocol.ErrorInfo;
 import com.n9.shared.protocol.MessageEnvelope;
 import com.n9.shared.protocol.MessageFactory;
-import com.n9.shared.MessageProtocol;
+import com.n9.shared.MessageProtocol; //
 import com.n9.shared.util.JsonUtils;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -70,7 +70,6 @@ public class ClientConnectionHandler implements Runnable {
                 try {
                     request = JsonUtils.fromJson(line, MessageEnvelope.class);
                     if (request == null) {
-                        // Tạo lỗi thủ công nếu JSON không hợp lệ
                         response = new MessageEnvelope(MessageProtocol.Type.SYSTEM_ERROR, "unknown", null);
                         response.setError(new ErrorInfo("INVALID_JSON", "Invalid JSON format received."));
                     } else {
@@ -89,7 +88,6 @@ public class ClientConnectionHandler implements Runnable {
         } catch (SocketTimeoutException e) {
             System.err.println("⏱️ Timeout from " + clientAddress);
         } catch (IOException e) {
-            // Lỗi này thường xảy ra khi client ngắt kết nối đột ngột, không cần in stack trace
             System.err.println("❌ Connection error from " + clientAddress + ": " + e.getMessage());
         } catch (Exception e) {
             System.err.println("❌ Unexpected error in run loop: " + clientAddress);
@@ -135,12 +133,6 @@ public class ClientConnectionHandler implements Runnable {
 
     private MessageEnvelope handleRegister(MessageEnvelope envelope) {
         // TODO: Lập trình viên A triển khai logic này.
-        // Gợi ý:
-        // 1. Parse payload thành RegisterRequestDto.
-        // 2. Gọi authService.register(...).
-        // 3. Nếu thành công, gọi sessionManager.createSession(...).
-        // 4. Tạo response thành công với sessionId và thông tin user.
-        // 5. Bắt exception và tạo response lỗi nếu có.
         return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Register functionality is not yet implemented.");
     }
 
@@ -160,11 +152,6 @@ public class ClientConnectionHandler implements Runnable {
 
     private MessageEnvelope handleMatchRequest(MessageEnvelope envelope) {
         // TODO: Lập trình viên B triển khai logic này.
-        // Gợi ý:
-        // 1. Xác thực session bằng sessionManager.getSession(...).
-        // 2. Lấy userId từ context.
-        // 3. Gọi matchmakingService.requestMatch(userId).
-        // 4. Trả về một response xác nhận đã vào hàng đợi.
         return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Matchmaking functionality is not yet implemented.");
     }
 
@@ -173,7 +160,6 @@ public class ClientConnectionHandler implements Runnable {
     // ============================================================================
 
     private MessageEnvelope handleGameStart(MessageEnvelope envelope) {
-        // Bước 1: Mọi handler cần xác thực đều phải kiểm tra session trước tiên.
         SessionManager.SessionContext context = sessionManager.getSession(envelope.getSessionId());
         if (context == null) {
             return MessageFactory.createErrorResponse(envelope, "AUTH_REQUIRED", "Invalid or missing session.");
@@ -181,7 +167,6 @@ public class ClientConnectionHandler implements Runnable {
         String playerId = context.getUserId();
 
         try {
-            // Bước 2: Parse payload.
             MatchStartDto startDto = JsonUtils.getObjectMapper().convertValue(envelope.getPayload(), MatchStartDto.class);
             String matchId = startDto.getMatchId();
 
@@ -189,16 +174,8 @@ public class ClientConnectionHandler implements Runnable {
                 return MessageFactory.createErrorResponse(envelope, "VALIDATION_ERROR", "Missing matchId in payload.");
             }
 
-            // Bước 3: Gọi service để xử lý logic.
-            GameService.GameState game = gameService.getGameState(matchId);
-            if (game == null) {
-                return MessageFactory.createErrorResponse(envelope, "GAME_NOT_FOUND", "Game not found or not initialized.");
-            }
-
-            // ... (Logic lấy bài, v.v...)
             Object responsePayload = new Object(); // Thay thế bằng DTO response thực tế
 
-            // Bước 4: Tạo và trả về response thành công.
             return MessageFactory.createResponse(envelope, MessageProtocol.Type.GAME_START, responsePayload);
 
         } catch (Exception e) {
@@ -228,7 +205,6 @@ public class ClientConnectionHandler implements Runnable {
             PlayCardAckDto ackDto = new PlayCardAckDto();
             ackDto.setGameId(matchId);
             ackDto.setCardId(playedCard.getCardId());
-            //...
 
             return MessageFactory.createResponse(envelope, MessageProtocol.Type.GAME_CARD_PLAY_SUCCESS, ackDto);
 
@@ -245,11 +221,6 @@ public class ClientConnectionHandler implements Runnable {
     // UTILITY METHODS
     // ============================================================================
 
-    /**
-     * Gửi một tin nhắn đến client một cách an toàn (thread-safe).
-     * Được gọi bởi các service khác (ví dụ: MatchmakingService) để đẩy thông báo.
-     * @param jsonMessage Tin nhắn đã được serialize thành chuỗi JSON.
-     */
     public synchronized void sendMessage(String jsonMessage) {
         try {
             if (writer != null && !socket.isClosed()) {
@@ -262,10 +233,11 @@ public class ClientConnectionHandler implements Runnable {
         }
     }
 
-    /**
-     * Dọn dẹp tài nguyên khi kết nối bị đóng.
-     */
     private void cleanup(String clientAddress) {
+        // THAY ĐỔI: Xóa session khi client ngắt kết nối
+        String sessionId = "UNKNOWN"; // Cần một cách để lấy sessionId của handler này
+        // sessionManager.removeSession(sessionId);
+
         try {
             if (reader != null) reader.close();
             if (writer != null) writer.close();

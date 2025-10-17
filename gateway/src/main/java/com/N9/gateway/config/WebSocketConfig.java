@@ -1,8 +1,6 @@
 package com.N9.gateway.config;
 
-import com.N9.gateway.handler.AuthenticationHandler;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.context.annotation.Bean;
+import com.N9.gateway.websocket.GatewayWebSocketHandler;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
@@ -12,19 +10,17 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
 
+    private final GatewayWebSocketHandler gatewayWebSocketHandler;
+
+    // Spring sẽ tự động "tiêm" (inject) handler vào đây
+    public WebSocketConfig(GatewayWebSocketHandler gatewayWebSocketHandler) {
+        this.gatewayWebSocketHandler = gatewayWebSocketHandler;
+    }
+
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(authenticationHandler(), "/ws/auth")
-                .setAllowedOrigins("*");
-    }
-
-    @Bean
-    public AuthenticationHandler authenticationHandler() {
-        return new AuthenticationHandler(objectMapper());
-    }
-
-    @Bean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper();
+        // Frontend sẽ kết nối đến địa chỉ ws://<gateway_ip>:<port>/ws
+        registry.addHandler(gatewayWebSocketHandler, "/ws")
+                .setAllowedOrigins("*"); // Cho phép tất cả các nguồn (tiện cho dev)
     }
 }

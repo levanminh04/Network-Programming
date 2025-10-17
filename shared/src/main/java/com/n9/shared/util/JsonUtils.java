@@ -300,9 +300,9 @@ public final class JsonUtils {
             throw new IllegalArgumentException("Correlation ID is required");
         }
         
-        if (envelope.getTimestamp() <= 0) {
-            throw new IllegalArgumentException("Timestamp must be positive");
-        }
+//        if (envelope.getTimestamp() <= 0) {
+//            throw new IllegalArgumentException("Timestamp must be positive");
+//        }
         
         return toJson(envelope);
     }
@@ -327,9 +327,9 @@ public final class JsonUtils {
             throw new IOException("Deserialized envelope missing required field: correlationId");
         }
         
-        if (envelope.getTimestamp() <= 0) {
-            throw new IOException("Deserialized envelope has invalid timestamp: " + envelope.getTimestamp());
-        }
+//        if (envelope.getTimestamp() <= 0) {
+//            throw new IOException("Deserialized envelope has invalid timestamp: " + envelope.getTimestamp());
+//        }
         
         return envelope;
     }
