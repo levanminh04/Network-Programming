@@ -1,176 +1,181 @@
-import com.n9.shared.protocol.*;
+// Giả sử file này được đặt trong thư mục test của module `core`
+// package com.n9.core; 
+
+import com.n9.shared.model.dto.auth.LoginRequestDto;
+import com.n9.shared.model.dto.auth.RegisterRequestDto;
 import com.n9.shared.model.dto.game.PlayCardRequestDto;
 import com.n9.shared.model.dto.match.MatchStartDto;
+import com.n9.shared.protocol.MessageEnvelope;
+import com.n9.shared.protocol.MessageFactory;
+import com.n9.shared.MessageProtocol;
 import com.n9.shared.util.JsonUtils;
-
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.net.Socket;
 
 /**
- * Test Client để kiểm thử Core Server
- * Sử dụng MessageEnvelope và DTOs từ shared module
- * 
- * Usage:
- * 1. Start Core Server: java com.n9.core.CoreServer
- * 2. Run: java -cp "target/classes:target/test-classes:..." TestCoreClient
- * 3. Xem kết quả test các message types
- * 
- * @version 2.0.0 (Updated for shared protocol)
+ * Test Client để kiểm thử Core Server sau khi đã refactor.
+ * Mô phỏng luồng: Register -> Login -> Game Start -> Play Card
+ *
+ * @version 2.1.0 (Refactored for MVP Protocol)
  */
 public class TestCoreClient {
-    
+
     private static final String HOST = "localhost";
     private static final int PORT = 9090;
-    
+
     public static void main(String[] args) {
-        System.out.println("🧪 Test Core Client Starting...");
-        System.out.println("📡 Using shared protocol: MessageEnvelope + MessageFactory");
+        System.out.println("🧪 Test Core Client Starting (MVP Protocol)...");
         System.out.println();
-        
+
         try (Socket socket = new Socket(HOST, PORT);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
              BufferedWriter out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
-            
+
             System.out.println("✅ Connected to Core Server at " + HOST + ":" + PORT);
             System.out.println();
-            
-            // Test 1: GAME.START
-            testGameStart(in, out);
-            
-            // Test 2: GAME.CARD_PLAY_REQUEST
-            testPlayCard(in, out, "match-123", "player1", 1);
-            
-            // Test 3: GAME.STATE_SYNC
-            testGameState(in, out, "match-123", "player1");
-            
-            System.out.println("\n✅ All tests completed!");
-            
+
+            // --- BẮT ĐẦU LUỒNG TEST LOGIC ---
+
+            // Test 1: Đăng ký một tài khoản mới
+            // Chúng ta không cần sessionId cho lần đầu đăng ký.
+            String sessionIdAfterRegister = testRegister(in, out);
+            if (sessionIdAfterRegister == null) {
+                System.err.println("❌ Registration failed. Aborting further tests.");
+                return;
+            }
+
+            // Test 2: Đăng nhập với tài khoản vừa tạo
+            String sessionIdAfterLogin = testLogin(in, out);
+            if (sessionIdAfterLogin == null) {
+                System.err.println("❌ Login failed. Aborting further tests.");
+                return;
+            }
+            System.out.println("🔑 Using Session ID for subsequent tests: " + sessionIdAfterLogin);
+            System.out.println();
+
+            // Test 3: Bắt đầu một trận game (giả lập)
+            // Yêu cầu này cần có sessionId hợp lệ
+            testGameStart(in, out, sessionIdAfterLogin);
+
+            // Test 4: Chơi một lá bài
+            // Yêu cầu này cũng cần sessionId hợp lệ
+            testPlayCard(in, out, sessionIdAfterLogin, "match-mvp-123", 25);
+
+            System.out.println("\n✅ All MVP tests completed successfully!");
+
         } catch (Exception e) {
-            System.err.println("❌ Error: " + e.getMessage());
+            System.err.println("❌ A critical error occurred: " + e.getMessage());
             e.printStackTrace();
         }
     }
-    
+
+    /**
+     * Test AUTH.REGISTER_REQUEST
+     * @return sessionId nếu đăng ký thành công, ngược lại trả về null.
+     */
+    private static String testRegister(BufferedReader in, BufferedWriter out) throws Exception {
+        System.out.println("=== Test 1: AUTH.REGISTER_REQUEST ===");
+
+        RegisterRequestDto registerDto = new RegisterRequestDto();
+        // Sử dụng một username ngẫu nhiên để mỗi lần chạy test đều thành công
+        String username = "testuser" + System.currentTimeMillis() % 1000;
+        registerDto.setUsername(username);
+        registerDto.setEmail(username + "@test.com");
+        registerDto.setPassword("password123");
+        registerDto.setDisplayName("Test User");
+
+        MessageEnvelope request = MessageFactory.createRequest(MessageProtocol.Type.AUTH_REGISTER_REQUEST, registerDto);
+
+        // Gửi và nhận phản hồi
+        MessageEnvelope response = sendAndReceive(in, out, request);
+
+        if (response != null && MessageProtocol.Type.AUTH_REGISTER_SUCCESS.equals(response.getType())) {
+            return response.getSessionId();
+        }
+        return null;
+    }
+
+    /**
+     * Test AUTH.LOGIN_REQUEST
+     * @return sessionId nếu đăng nhập thành công, ngược lại trả về null.
+     */
+    private static String testLogin(BufferedReader in, BufferedWriter out) throws Exception {
+        System.out.println("=== Test 2: AUTH.LOGIN_REQUEST ===");
+
+        LoginRequestDto loginDto = new LoginRequestDto();
+        loginDto.setUsername("alice"); // Giả sử user "alice" đã tồn tại
+        loginDto.setPassword("password123");
+
+        MessageEnvelope request = MessageFactory.createRequest(MessageProtocol.Type.AUTH_LOGIN_REQUEST, loginDto);
+
+        MessageEnvelope response = sendAndReceive(in, out, request);
+
+        if (response != null && MessageProtocol.Type.AUTH_LOGIN_SUCCESS.equals(response.getType())) {
+            return response.getSessionId();
+        }
+        return null;
+    }
+
     /**
      * Test GAME.START message
      */
-    private static void testGameStart(BufferedReader in, BufferedWriter out) throws Exception {
-        System.out.println("=== Test 1: GAME.START ===");
-        
-        // Create MatchStartDto payload
+    private static void testGameStart(BufferedReader in, BufferedWriter out, String sessionId) throws Exception {
+        System.out.println("=== Test 3: GAME.START ===");
+
         MatchStartDto startDto = new MatchStartDto();
-        startDto.setMatchId("match-123");
-        startDto.setGameId("match-123");
-        startDto.setGameMode("QUICK_MATCH");
-        startDto.setPlayerPosition(1);
-        startDto.setTotalRounds(3);
-        startDto.setRoundTimeout(10);
-        
-        // Create MessageEnvelope using MessageFactory
-        MessageEnvelope request = MessageFactory.createRequest(
-            MessageType.GAME_START,
-            "player1",  // userId
-            "session-123",  // sessionId
-            "match-123",  // matchId
-            startDto
-        );
-        
-        // Send message
-        String jsonRequest = JsonUtils.toJson(request);
-        System.out.println("📤 Sending: " + jsonRequest);
-        out.write(jsonRequest);
-        out.newLine();
-        out.flush();
-        
-        // Receive response
-        String response = in.readLine();
-        System.out.println("📥 Received: " + response);
-        
-        // Parse response
-        MessageEnvelope responseEnvelope = JsonUtils.fromJson(response, MessageEnvelope.class);
-        System.out.println("   Type: " + responseEnvelope.getType());
-        System.out.println("   CorrelationId: " + responseEnvelope.getCorrelationId());
-        System.out.println();
-        
-        Thread.sleep(1000);
+        startDto.setMatchId("match-mvp-123");
+
+        MessageEnvelope request = MessageFactory.createRequest(MessageProtocol.Type.GAME_START, startDto);
+        request.setSessionId(sessionId); // Gắn sessionId vào request
+
+        sendAndReceive(in, out, request);
     }
-    
+
     /**
      * Test GAME.CARD_PLAY_REQUEST message
      */
-    private static void testPlayCard(BufferedReader in, BufferedWriter out, 
-                                      String matchId, String playerId, int cardId) throws Exception {
-        System.out.println("=== Test 2: GAME.CARD_PLAY_REQUEST ===");
-        
-        // Create PlayCardRequestDto payload
+    private static void testPlayCard(BufferedReader in, BufferedWriter out,
+                                     String sessionId, String matchId, int cardId) throws Exception {
+        System.out.println("=== Test 4: GAME.CARD_PLAY_REQUEST ===");
+
         PlayCardRequestDto playDto = new PlayCardRequestDto();
         playDto.setGameId(matchId);
         playDto.setRoundNumber(1);
         playDto.setCardId(cardId);
-        
-        // Create MessageEnvelope
-        MessageEnvelope request = MessageFactory.createRequest(
-            MessageType.GAME_CARD_PLAY_REQUEST,
-            playerId,  // userId
-            "session-123",  // sessionId
-            matchId,  // matchId
-            playDto
-        );
-        
-        // Send message
-        String jsonRequest = JsonUtils.toJson(request);
-        System.out.println("📤 Sending: " + jsonRequest);
-        out.write(jsonRequest);
-        out.newLine();
-        out.flush();
-        
-        // Receive response
-        String response = in.readLine();
-        System.out.println("📥 Received: " + response);
-        
-        // Parse response
-        MessageEnvelope responseEnvelope = JsonUtils.fromJson(response, MessageEnvelope.class);
-        System.out.println("   Type: " + responseEnvelope.getType());
-        System.out.println("   CorrelationId: " + responseEnvelope.getCorrelationId());
-        System.out.println();
-        
-        Thread.sleep(1000);
+
+        MessageEnvelope request = MessageFactory.createRequest(MessageProtocol.Type.GAME_CARD_PLAY_REQUEST, playDto);
+        request.setSessionId(sessionId); // Gắn sessionId vào request
+
+        sendAndReceive(in, out, request);
     }
-    
+
     /**
-     * Test GAME.STATE_SYNC message
+     * Hàm tiện ích để gửi một request và nhận lại response.
      */
-    private static void testGameState(BufferedReader in, BufferedWriter out,
-                                       String matchId, String playerId) throws Exception {
-        System.out.println("=== Test 3: GAME.STATE_SYNC ===");
-        
-        // Create MessageEnvelope (no payload needed for state sync)
-        MessageEnvelope request = MessageFactory.createRequest(
-            MessageType.GAME_STATE_SYNC,
-            playerId,  // userId
-            "session-123",  // sessionId
-            matchId,  // matchId
-            null  // No payload
-        );
-        
-        // Send message
+    private static MessageEnvelope sendAndReceive(BufferedReader in, BufferedWriter out, MessageEnvelope request) throws Exception {
         String jsonRequest = JsonUtils.toJson(request);
         System.out.println("📤 Sending: " + jsonRequest);
+
         out.write(jsonRequest);
         out.newLine();
         out.flush();
-        
-        // Receive response
-        String response = in.readLine();
-        System.out.println("📥 Received: " + response);
-        
-        // Parse response
-        MessageEnvelope responseEnvelope = JsonUtils.fromJson(response, MessageEnvelope.class);
-        System.out.println("   Type: " + responseEnvelope.getType());
-        System.out.println("   CorrelationId: " + responseEnvelope.getCorrelationId());
-        if (responseEnvelope.getPayload() != null) {
-            System.out.println("   Payload: " + responseEnvelope.getPayload().toString());
+
+        String jsonResponse = in.readLine();
+        System.out.println("📥 Received: " + jsonResponse);
+
+        MessageEnvelope responseEnvelope = JsonUtils.fromJson(jsonResponse, MessageEnvelope.class);
+        if (responseEnvelope != null) {
+            System.out.println("   Type: " + responseEnvelope.getType());
+            System.out.println("   CorrelationId: " + responseEnvelope.getCorrelationId());
+            if (responseEnvelope.getError() != null) {
+                System.err.println("   Error: " + responseEnvelope.getError().getCode() + " - " + responseEnvelope.getError().getMessage());
+            }
         }
         System.out.println();
+        Thread.sleep(500); // Chờ một chút giữa các lần test
+        return responseEnvelope;
     }
 }
