@@ -12,7 +12,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     private final GatewayWebSocketHandler gatewayWebSocketHandler;
 
-    // Spring sẽ tự động "tiêm" (inject) handler vào đây
+    // Spring sẽ tự động inject handler vào đây
     public WebSocketConfig(GatewayWebSocketHandler gatewayWebSocketHandler) {
         this.gatewayWebSocketHandler = gatewayWebSocketHandler;
     }
@@ -21,6 +21,6 @@ public class WebSocketConfig implements WebSocketConfigurer {
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         // Frontend sẽ kết nối đến địa chỉ ws://<gateway_ip>:<port>/ws
         registry.addHandler(gatewayWebSocketHandler, "/ws")
-                .setAllowedOrigins("*"); // Cho phép tất cả các nguồn (tiện cho dev)
+                .setAllowedOrigins("*"); // Cho phép tất cả các nguồn
     }
 }

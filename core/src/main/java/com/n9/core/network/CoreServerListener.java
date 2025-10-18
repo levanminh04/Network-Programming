@@ -58,10 +58,11 @@ public class CoreServerListener implements Runnable {
                         clientSocket,
                         gameService,
                         authService,
-                        sessionManager
+                        sessionManager,
+                        pool
                 );
 
-                pool.submit(handler);
+                pool.submit(handler); // chỉ được gọi đúng một lần
 
             } catch (IOException e) {
                 if (running) {
