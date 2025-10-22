@@ -38,9 +38,7 @@ public class ClientConnectionHandler implements Runnable {
 
     private String currentSessionId = null;
 
-    /**
-     * Constructor được cập nhật để nhận cả ExecutorService.
-     */
+
     public ClientConnectionHandler(
             Socket socket,
             GameService gameService,
@@ -58,7 +56,7 @@ public class ClientConnectionHandler implements Runnable {
     @Override
     public void run() {
         String clientAddress = socket.getRemoteSocketAddress().toString();
-        System.out.println("✅ I/O Thread started for connection from: " + clientAddress);
+        System.out.println("I/O Thread started for connection from: " + clientAddress);
 
         try {
             // THAY ĐỔI: Khởi tạo DataInputStream và DataOutputStream
@@ -130,7 +128,7 @@ public class ClientConnectionHandler implements Runnable {
         MessageEnvelope response;
 
         switch (type) {
-            // ... (Tất cả các case của bạn)
+
             case MessageProtocol.Type.AUTH_REGISTER_REQUEST:
                 response = handleRegister(envelope);
                 break;
@@ -148,12 +146,24 @@ public class ClientConnectionHandler implements Runnable {
 
         return response;
     }
-    private MessageEnvelope handleRegister(MessageEnvelope envelope) { return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented."); }
-    private MessageEnvelope handleLogin(MessageEnvelope envelope) { return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented."); }
-    private MessageEnvelope handleLogout(MessageEnvelope envelope) { return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented."); }
-    private MessageEnvelope handleMatchRequest(MessageEnvelope envelope) { return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented."); }
-    private MessageEnvelope handleGameStart(MessageEnvelope envelope) { return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented."); }
-    private MessageEnvelope handlePlayCard(MessageEnvelope envelope) { return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented."); }
+    private MessageEnvelope handleRegister(MessageEnvelope envelope) {
+        return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented.");
+    }
+    private MessageEnvelope handleLogin(MessageEnvelope envelope) {
+        return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented.");
+    }
+    private MessageEnvelope handleLogout(MessageEnvelope envelope) {
+        return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented.");
+    }
+    private MessageEnvelope handleMatchRequest(MessageEnvelope envelope) {
+        return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented.");
+    }
+    private MessageEnvelope handleGameStart(MessageEnvelope envelope) {
+        return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented.");
+    }
+    private MessageEnvelope handlePlayCard(MessageEnvelope envelope) {
+        return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented.");
+    }
 
 
     /**
