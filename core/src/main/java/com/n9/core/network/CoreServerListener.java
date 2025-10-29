@@ -6,6 +6,7 @@ import com.n9.core.service.SessionManager;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 
 /**
@@ -23,20 +24,22 @@ public class CoreServerListener implements Runnable {
     private final SessionManager sessionManager;
 
     private volatile boolean running = true;
-
+    private final ConcurrentHashMap<String, ClientConnectionHandler> activeConnections; // <-- THÊM TRƯỜNG
     // THAY ĐỔI: Constructor được cập nhật để nhận tất cả các service
     public CoreServerListener(
             ServerSocket serverSocket,
             ExecutorService pool,
             GameService gameService,
             AuthService authService,
-            SessionManager sessionManager
+            SessionManager sessionManager,
+            ConcurrentHashMap<String, ClientConnectionHandler> activeConnections // <-- NHẬN MAP
     ) {
         this.serverSocket = serverSocket;
         this.pool = pool;
         this.gameService = gameService;
         this.authService = authService;
         this.sessionManager = sessionManager;
+        this.activeConnections = activeConnections;
     }
 
     public void start() {
@@ -59,7 +62,8 @@ public class CoreServerListener implements Runnable {
                         gameService,
                         authService,
                         sessionManager,
-                        pool
+                        pool,
+                        activeConnections
                 );
 
                 pool.submit(handler); // chỉ được gọi đúng một lần

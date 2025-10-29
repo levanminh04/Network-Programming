@@ -16,6 +16,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 
 /**
@@ -38,19 +39,21 @@ public class ClientConnectionHandler implements Runnable {
 
     private String currentSessionId = null;
 
-
+    private final ConcurrentHashMap<String, ClientConnectionHandler> activeConnections; // <-- THÊM TRƯỜNG
     public ClientConnectionHandler(
             Socket socket,
             GameService gameService,
             AuthService authService,
             SessionManager sessionManager,
-            ExecutorService pool
+            ExecutorService pool,
+            ConcurrentHashMap<String, ClientConnectionHandler> activeConnections
     ) {
         this.socket = socket;
         this.gameService = gameService;
         this.authService = authService;
         this.sessionManager = sessionManager;
         this.pool = pool;
+        this.activeConnections = activeConnections;
     }
 
     @Override
@@ -140,12 +143,31 @@ public class ClientConnectionHandler implements Runnable {
                 response = MessageFactory.createErrorResponse(envelope, "UNKNOWN_TYPE", "Unknown message type: " + type);
         }
 
-        if (response != null && response.getSessionId() != null && response.getError() == null) {
+        if (response != null && response.getError() == null &&
+                (response.getType().equals(MessageProtocol.Type.AUTH_LOGIN_SUCCESS) || response.getType().equals(MessageProtocol.Type.AUTH_REGISTER_SUCCESS)))
+        {
+            // Lấy userId từ SessionContext (an toàn nhất)
+            SessionManager.SessionContext context = sessionManager.getSession(response.getSessionId());
+            if (context != null) {
+                String userId = context.getUserId();
+                this.currentSessionId = response.getSessionId(); // Lưu sessionId lại handler
+                // Đặt handler này vào map để các service khác có thể tìm thấy
+                activeConnections.put(userId, this);
+                System.out.println("🔗 User " + userId + " associated with connection: " + socket.getRemoteSocketAddress());
+            } else {
+                System.err.println("⚠️ Login/Register success but session context not found immediately for sid: " + response.getSessionId());
+            }
+        }
+        // Cập nhật currentSessionId nếu là response thành công khác có session
+        else if (response != null && response.getSessionId() != null && response.getError() == null) {
             this.currentSessionId = response.getSessionId();
         }
 
         return response;
     }
+
+
+
     private MessageEnvelope handleRegister(MessageEnvelope envelope) {
         return MessageFactory.createErrorResponse(envelope, "NOT_IMPLEMENTED", "Not implemented.");
     }
@@ -190,6 +212,12 @@ public class ClientConnectionHandler implements Runnable {
 
     private void cleanup(String clientAddress) {
         if (this.currentSessionId != null) {
+            SessionManager.SessionContext context = sessionManager.getSession(this.currentSessionId);
+            if (context != null) {
+                // Xóa khỏi activeConnections trước khi xóa session
+                activeConnections.remove(context.getUserId());
+                System.out.println("🔗 Removed connection mapping for user: " + context.getUserId());
+            }
             sessionManager.removeSession(this.currentSessionId);
         }
         try {

@@ -48,7 +48,8 @@ public final class CoreServer {
                 executor,
                 gameService,
                 authService,
-                sessionManager
+                sessionManager,
+                activeConnections
         );
         listener.start();
 
