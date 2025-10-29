@@ -38,7 +38,7 @@ public final class CoreServer {
         var executor = Executors.newCachedThreadPool();
 
         // --- KHỞI TẠO CÁC SERVICE ---
-        var gameService = new GameService();
+        var gameService = new GameService(activeConnections, scheduler);
         var authService = new AuthService(dbManager);
         var sessionManager = new SessionManager(dbManager);
 
