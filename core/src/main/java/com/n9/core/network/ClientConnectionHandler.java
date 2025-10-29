@@ -90,7 +90,7 @@ public class ClientConnectionHandler implements Runnable {
                                 response = handleMessage(request);
                             }
                         } catch (Exception e) {
-                            System.err.println("❌ Worker thread caught error: " + e.getMessage());
+                            System.err.println(" Worker thread caught error: " + e.getMessage());
                             response = MessageFactory.createErrorResponse(request, "INTERNAL_SERVER_ERROR", "An unexpected error occurred.");
                         }
 
@@ -98,9 +98,9 @@ public class ClientConnectionHandler implements Runnable {
                         try {
                             String jsonResponse = JsonUtils.toJson(response);
                             sendMessage(jsonResponse); // sendMessage bây giờ cũng dùng DataOutputStream
-                            System.out.println("📤 Worker thread sent: " + jsonResponse.substring(0, Math.min(100, jsonResponse.length())));
+                            System.out.println(" Worker thread sent: " + jsonResponse.substring(0, Math.min(100, jsonResponse.length())));
                         } catch (JsonProcessingException e) {
-                            System.err.println("❌ Worker thread failed to serialize response: " + e.getMessage());
+                            System.err.println(" Worker thread failed to serialize response: " + e.getMessage());
                         }
                     };
 
@@ -110,11 +110,11 @@ public class ClientConnectionHandler implements Runnable {
             }
         } catch (EOFException e) {
             // Đây là trường hợp bình thường khi Gateway đóng kết nối, không phải lỗi
-            System.out.println("🔌 Gateway closed the connection gracefully: " + clientAddress);
+            System.out.println(" Gateway closed the connection gracefully: " + clientAddress);
         } catch (IOException e) {
-            System.err.println("❌ Connection lost with " + clientAddress + ": " + e.getMessage());
+            System.err.println(" Connection lost with " + clientAddress + ": " + e.getMessage());
         } catch (Exception e) {
-            System.err.println("❌ Unexpected error in I/O loop for " + clientAddress);
+            System.err.println(" Unexpected error in I/O loop for " + clientAddress);
             e.printStackTrace();
         } finally {
             cleanup(clientAddress);
@@ -184,7 +184,7 @@ public class ClientConnectionHandler implements Runnable {
                 out.flush();
             }
         } catch (IOException e) {
-            System.err.println("❌ Failed to send message to " + socket.getRemoteSocketAddress() + ": " + e.getMessage());
+            System.err.println(" Failed to send message to " + socket.getRemoteSocketAddress() + ": " + e.getMessage());
         }
     }
 
@@ -197,9 +197,9 @@ public class ClientConnectionHandler implements Runnable {
             if (in != null) in.close();
             if (out != null) out.close();
             if (socket != null && !socket.isClosed()) socket.close();
-            System.out.println("🧹 Connection cleaned up for: " + clientAddress);
+            System.out.println(" Connection cleaned up for: " + clientAddress);
         } catch (IOException e) {
-            System.err.println("❌ Error during cleanup: " + e.getMessage());
+            System.err.println(" Error during cleanup: " + e.getMessage());
         }
     }
 }

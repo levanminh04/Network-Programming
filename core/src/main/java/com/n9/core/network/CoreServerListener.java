@@ -66,7 +66,7 @@ public class CoreServerListener implements Runnable {
 
             } catch (IOException e) {
                 if (running) {
-                    System.err.println("❌ Error accepting connection: " + e.getMessage());
+                    System.err.println(" Error accepting connection: " + e.getMessage());
                 }
             }
         }

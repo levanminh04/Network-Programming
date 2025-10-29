@@ -65,7 +65,7 @@ public class SessionManager {
     }
 
     /**
-     * 🎟️ Tạo một session mới sau khi người dùng đăng nhập/đăng ký thành công.
+     *  Tạo một session mới sau khi người dùng đăng nhập/đăng ký thành công.
      *
      * @param userId ID của người dùng (dưới dạng String)
      * @param username Tên đăng nhập của người dùng
@@ -84,15 +84,15 @@ public class SessionManager {
         try {
             persistSessionToDB(sessionId, userId);
         } catch (SQLException e) {
-            System.err.println("⚠️ WARNING: Failed to persist session to DB: " + e.getMessage());
+            System.err.println("⚠ WARNING: Failed to persist session to DB: " + e.getMessage());
         }
 
-        System.out.println("✅ Session created: " + sessionId + " for user: " + username);
+        System.out.println(" Session created: " + sessionId + " for user: " + username);
         return sessionId;
     }
 
     /**
-     * 🔍 Kiểm tra một sessionId có hợp lệ không và lấy thông tin người dùng.
+     *  Kiểm tra một sessionId có hợp lệ không và lấy thông tin người dùng.
      * Đây là hàm được gọi ở đầu mỗi request cần xác thực.
      *
      * @param sessionId Session ID do client gửi lên.
@@ -131,14 +131,14 @@ public class SessionManager {
             try {
                 deleteSessionFromDB(sessionId);
             } catch (SQLException e) {
-                System.err.println("⚠️ WARNING: Failed to delete session from DB: " + e.getMessage());
+                System.err.println("⚠WARNING: Failed to delete session from DB: " + e.getMessage());
             }
-            System.out.println("🧹 Session removed for user: " + removedContext.getUsername());
+            System.out.println(" Session removed for user: " + removedContext.getUsername());
         }
     }
 
     /**
-     * 🎮 Cập nhật trạng thái của người dùng khi họ tham gia một trận đấu.
+     *  Cập nhật trạng thái của người dùng khi họ tham gia một trận đấu.
      *
      * @param sessionId Session của người dùng.
      * @param matchId ID của trận đấu họ vừa tham gia.
