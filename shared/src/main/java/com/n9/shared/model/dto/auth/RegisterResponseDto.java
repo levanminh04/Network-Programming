@@ -55,7 +55,8 @@ public class RegisterResponseDto {
      */
     @JsonProperty("message")
     private String message;
-    
+    @JsonProperty("timestamp")
+    private Long timestamp;
     // ============================================================================
     // CONSTRUCTORS
     // ============================================================================
@@ -182,7 +183,8 @@ public class RegisterResponseDto {
     public void setMessage(String message) {
         this.message = message;
     }
-    
+    public Long getTimestamp() { return timestamp; }
+    public void setTimestamp(Long timestamp) { this.timestamp = timestamp; }
     // ============================================================================
     // OBJECT METHODS
     // ============================================================================

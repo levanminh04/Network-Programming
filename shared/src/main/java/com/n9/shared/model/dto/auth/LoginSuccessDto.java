@@ -61,7 +61,13 @@ public class LoginSuccessDto {
     /** Last login timestamp */
     @JsonProperty("lastLogin")
     private Long lastLogin;
-    
+    // THÊM: Email nếu AuthService trả về
+    @JsonProperty("email")
+    private String email;
+
+    // THÊM: Timestamp nếu AuthService trả về
+    @JsonProperty("timestamp")
+    private Long timestamp;
     // ============================================================================
     // CONSTRUCTORS
     // ============================================================================
@@ -173,7 +179,12 @@ public class LoginSuccessDto {
     // ============================================================================
     // ACCESSORS
     // ============================================================================
-    
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
+    // THÊM SETTER CHO TIMESTAMP
+    public Long getTimestamp() { return timestamp; }
+    public void setTimestamp(Long timestamp) { this.timestamp = timestamp; }
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
     
