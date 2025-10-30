@@ -77,14 +77,18 @@ public class ClientConnectionHandler implements Runnable {
             in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
             out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
 
+            // --- GIẢI PHÁP PHÁ VỠ DEADLOCK ---
+            // Gửi tin nhắn chào mừng ngay khi kết nối
+            sendWelcomeMessage();
+
             while (!socket.isClosed()) {
                 // 1. Đọc 4 byte độ dài tin nhắn
                 int length = in.readInt();
 
-//                // Thêm kiểm tra kích thước tin nhắn để bảo vệ server
-//                if (length > GameConstants.MAX_MESSAGE_SIZE) { // Giả sử có hằng số này
-//                    throw new IOException("Message size exceeds limit: " + length);
-//                }
+                // Thêm kiểm tra kích thước tin nhắn để bảo vệ server
+                if (length > GameConstants.MAX_MESSAGE_SIZE) { // Giả sử có hằng số này
+                    throw new IOException("Message size exceeds limit: " + length);
+                }
 
                 if (length > 0) {
                     // 2. Đọc chính xác `length` byte
@@ -185,8 +189,7 @@ public class ClientConnectionHandler implements Runnable {
 
         // Cập nhật 'activeConnections' map sau khi Auth thành công
         if (response != null && response.getError() == null &&
-                (type.equals(MessageProtocol.Type.AUTH_LOGIN_REQUEST) || type.equals(MessageProtocol.Type.AUTH_REGISTER_REQUEST)))
-        {
+                (type.equals(MessageProtocol.Type.AUTH_LOGIN_REQUEST) || type.equals(MessageProtocol.Type.AUTH_REGISTER_REQUEST))) {
             SessionManager.SessionContext context = sessionManager.getSession(response.getSessionId());
             if (context != null) {
                 String userId = context.getUserId();
@@ -203,6 +206,19 @@ public class ClientConnectionHandler implements Runnable {
         }
 
         return response;
+    }
+
+
+
+    private void sendWelcomeMessage() {
+        System.out.println("Sending SYSTEM.WELCOME to Gateway...");
+        MessageEnvelope welcome = MessageFactory.createNotification(MessageProtocol.Type.SYSTEM_WELCOME, Map.of("message", "Welcome to Core Server v1.1.0"));
+        try {
+            String json = JsonUtils.toJson(welcome);
+            sendMessage(json);
+        } catch (JsonProcessingException e) {
+            System.err.println("❌ Failed to serialize WELCOME message: " + e.getMessage());
+        }
     }
 
     // ============================================================================

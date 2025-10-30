@@ -84,12 +84,10 @@ public final class MessageProtocol {
         // ============================
         // SYSTEM DOMAIN
         // ============================
-
-        /** Ping từ client để kiểm tra kết nối. */
+        // THÊM: Tin nhắn chào mừng để phá vỡ deadlock
+        public static final String SYSTEM_WELCOME        = "SYSTEM.WELCOME";
         public static final String SYSTEM_PING           = "SYSTEM.PING";
-        /** Pong từ server để trả lời ping. */
         public static final String SYSTEM_PONG           = "SYSTEM.PONG";
-        /** Tin nhắn báo lỗi chung. */
         public static final String SYSTEM_ERROR          = "SYSTEM.ERROR";
 
     }

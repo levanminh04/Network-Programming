@@ -211,7 +211,11 @@ public final class GameConstants {
      * Custom match mode (DEFERRED)
      */
     public static final String GAME_MODE_CUSTOM = "CUSTOM";
-    
+    /**
+     * Kích thước tin nhắn tối đa (bytes) cho phép từ Gateway.
+     * 65536 bytes = 64KB. Giúp chống lại tấn công OutOfMemoryError.
+     */
+    public static final int MAX_MESSAGE_SIZE = 65536;
     // ============================================================================
     // UTILITY METHODS
     // ============================================================================
