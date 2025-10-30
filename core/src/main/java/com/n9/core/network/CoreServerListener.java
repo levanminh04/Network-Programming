@@ -2,7 +2,7 @@ package com.n9.core.network;
 
 import com.n9.core.service.AuthService;
 import com.n9.core.service.GameService;
-import com.n9.core.service.MatchmakingService;
+import com.n9.core.service.MatchmakingService; // Thêm import
 import com.n9.core.service.SessionManager;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -21,10 +21,11 @@ public class CoreServerListener implements Runnable {
     private final GameService gameService;
     private final AuthService authService;
     private final SessionManager sessionManager;
-    private final MatchmakingService matchmakingService;
+    private final MatchmakingService matchmakingService; // Thêm
     private final ConcurrentHashMap<String, ClientConnectionHandler> activeConnections;
     private volatile boolean running = true;
 
+    // Constructor đã được cập nhật
     public CoreServerListener(
             ServerSocket serverSocket,
             ExecutorService pool,
@@ -32,7 +33,7 @@ public class CoreServerListener implements Runnable {
             AuthService authService,
             SessionManager sessionManager,
             ConcurrentHashMap<String, ClientConnectionHandler> activeConnections,
-            MatchmakingService matchmakingService
+            MatchmakingService matchmakingService // Thêm
     ) {
         this.serverSocket = serverSocket;
         this.pool = pool;
@@ -40,7 +41,7 @@ public class CoreServerListener implements Runnable {
         this.authService = authService;
         this.sessionManager = sessionManager;
         this.activeConnections = activeConnections;
-        this.matchmakingService = matchmakingService;
+        this.matchmakingService = matchmakingService; // Thêm
     }
 
     public void start() {
@@ -52,20 +53,20 @@ public class CoreServerListener implements Runnable {
         while (running && !serverSocket.isClosed()) {
             try {
                 Socket clientSocket = serverSocket.accept();
-                clientSocket.setSoTimeout(30000); // 30s read timeout
 
-                // Khởi tạo Handler với đầy đủ dependencies
+                // THAY ĐỔI: ĐÃ XÓA DÒNG clientSocket.setSoTimeout(30000);
+                // Chúng ta sẽ dựa vào Heartbeat để quản lý kết nối.
+
                 ClientConnectionHandler handler = new ClientConnectionHandler(
                         clientSocket,
                         gameService,
                         authService,
                         sessionManager,
-                        matchmakingService, // Truyền matchmaking
+                        matchmakingService,
                         pool,
                         activeConnections
                 );
 
-                // Giao cho pool chạy luồng I/O của Handler
                 pool.submit(handler);
 
             } catch (IOException e) {
@@ -83,3 +84,5 @@ public class CoreServerListener implements Runnable {
         } catch (IOException ignored) {}
     }
 }
+// Các comment gốc của bạn về ServerSocket và vòng lặp while vẫn hoàn toàn chính xác.
+
