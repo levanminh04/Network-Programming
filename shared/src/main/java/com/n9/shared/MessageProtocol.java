@@ -42,8 +42,13 @@ public final class MessageProtocol {
         // LOBBY DOMAIN
         // ============================
 
-        // THAY ĐỔI: Gom các message liên quan đến matchmaking vào LOBBY
+        // ============================
+        // LOBBY DOMAIN
+        // ============================
         public static final String LOBBY_MATCH_REQUEST   = "LOBBY.MATCH_REQUEST";
+        // THÊM HẰNG SỐ CÒN THIẾU
+        /** Phản hồi từ server, xác nhận đã nhận yêu cầu tìm trận. */
+        public static final String LOBBY_MATCH_REQUEST_ACK = "LOBBY.MATCH_REQUEST_ACK";
         public static final String LOBBY_MATCH_CANCEL    = "LOBBY.MATCH_CANCEL";
 
 
