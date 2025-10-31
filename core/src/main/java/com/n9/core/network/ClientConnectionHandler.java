@@ -25,6 +25,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -269,10 +270,24 @@ public class ClientConnectionHandler implements Runnable {
         if (context == null) throw new IllegalArgumentException("Authentication required.");
         PlayCardRequestDto dto = JsonUtils.getObjectMapper().convertValue(envelope.getPayload(), PlayCardRequestDto.class);
 
-        // gameService.playCard() sẽ ném Exception nếu thất bại, và tự gửi response/notification
-        gameService.playCard(dto.getGameId(), context.getUserId(), dto.getCardId());
-
-        return null; // Trả về null, worker thread sẽ không gửi gì
+        try {
+            // gameService.playCard() sẽ ném Exception nếu thất bại, và tự gửi response/notification
+            gameService.playCard(dto.getGameId(), context.getUserId(), dto.getCardId());
+            return null; // Success: worker thread sẽ không gửi gì (GameService đã gửi)
+            
+        } catch (IllegalArgumentException e) {
+            // Card không hợp lệ → Gửi FAILURE với cơ chế retry
+            System.err.println("⚠️ Invalid card selection [" + dto.getCardId() + "]: " + e.getMessage());
+            
+            Map<String, Object> failurePayload = new HashMap<>();
+            failurePayload.put("gameId", dto.getGameId());
+            failurePayload.put("cardId", dto.getCardId());
+            failurePayload.put("canRetry", true); // ← Cho phép chọn lại
+            failurePayload.put("reason", e.getMessage());
+            failurePayload.put("message", "Invalid card selection. Please choose another card.");
+            
+            return MessageFactory.createResponse(envelope, MessageProtocol.Type.GAME_CARD_PLAY_FAILURE, failurePayload);
+        }
     }
 
     // ... (sendMessage và cleanup giữ nguyên)

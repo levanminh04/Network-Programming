@@ -4,55 +4,47 @@ import com.n9.core.database.DatabaseManager;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.util.Collection; // Thêm import
+import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * SessionManager - Quản lý các phiên làm việc (session) đang hoạt động của người dùng.
- * @version 1.1.0 (Refactored for MVP)
+ * SessionManager - Quản lý các phiên làm việc (session).
+ * @version 1.1.2 (Fixed DB query, added user mapping)
  */
 public class SessionManager {
 
-    /**
-     * Lớp nội (inner class) chứa thông tin của một phiên làm việc.
-     */
     public static class SessionContext {
-        private final String sessionId;
-        private final String userId;
-        private final String username;
-        private String currentMatchId;
-        private long lastActivityTimestamp;
-
-        public SessionContext(String sessionId, String userId, String username) {
-            this.sessionId = sessionId;
-            this.userId = userId;
-            this.username = username;
-            this.lastActivityTimestamp = System.currentTimeMillis();
-        }
+        private final String sessionId; private final String userId; private final String username;
+        private String currentMatchId; private long lastActivityTimestamp;
+        public SessionContext(String sid, String uid, String uname) { this.sessionId=sid; this.userId=uid; this.username=uname; this.lastActivityTimestamp=System.currentTimeMillis(); }
         public void updateActivity() { this.lastActivityTimestamp = System.currentTimeMillis(); }
         public String getSessionId() { return sessionId; }
         public String getUserId() { return userId; }
         public String getUsername() { return username; }
         public String getCurrentMatchId() { return currentMatchId; }
-        public void setCurrentMatchId(String currentMatchId) { this.currentMatchId = currentMatchId; }
+        public void setCurrentMatchId(String mid) { this.currentMatchId = mid; }
     }
 
     private final ConcurrentHashMap<String, SessionContext> activeSessions;
+    // THÊM: Map tra cứu ngược: userId -> SessionContext
+    private final ConcurrentHashMap<String, SessionContext> userSessionMap;
     private final DatabaseManager dbManager;
 
     public SessionManager(DatabaseManager dbManager) {
         this.dbManager = dbManager;
         this.activeSessions = new ConcurrentHashMap<>();
+        this.userSessionMap = new ConcurrentHashMap<>(); // Khởi tạo
     }
 
-    /**
-     * Tạo một session mới.
-     */
     public String createSession(String userId, String username) {
+        removeSessionByUserId(userId); // Đảm bảo single-session
+
         String sessionId = UUID.randomUUID().toString();
         SessionContext context = new SessionContext(sessionId, userId, username);
         activeSessions.put(sessionId, context);
+        userSessionMap.put(userId, context); // Thêm vào map tra cứu ngược
+
         try {
             persistSessionToDB(sessionId, userId);
         } catch (SQLException e) {
@@ -62,27 +54,28 @@ public class SessionManager {
         return sessionId;
     }
 
-    /**
-     * Kiểm tra một sessionId và lấy context.
-     */
     public SessionContext getSession(String sessionId) {
-        if (sessionId == null || sessionId.isEmpty()) {
-            return null;
-        }
+        if (sessionId == null || sessionId.isEmpty()) return null;
         SessionContext context = activeSessions.get(sessionId);
-        if (context != null) {
-            context.updateActivity();
-        }
+        if (context != null) context.updateActivity();
         return context;
     }
 
+    // --- THÊM HÀM MỚI ---
     /**
-     * Xóa một session.
+     * Lấy SessionContext bằng userId.
      */
+    public SessionContext getSessionByUserId(String userId) {
+        if (userId == null) return null;
+        return userSessionMap.get(userId);
+    }
+    // --------------------
+
     public void removeSession(String sessionId) {
         if (sessionId == null) return;
         SessionContext removedContext = activeSessions.remove(sessionId);
         if (removedContext != null) {
+            userSessionMap.remove(removedContext.getUserId());
             try {
                 deleteSessionFromDB(sessionId);
             } catch (SQLException e) {
@@ -92,36 +85,37 @@ public class SessionManager {
         }
     }
 
-    /**
-     * Gán matchId cho một session.
-     */
+    private void removeSessionByUserId(String userId) {
+        if (userId == null) return;
+        SessionContext oldContext = userSessionMap.remove(userId);
+        if (oldContext != null) {
+            activeSessions.remove(oldContext.getSessionId());
+            try {
+                deleteSessionFromDB(oldContext.getSessionId());
+            } catch (SQLException e) {
+                System.err.println("⚠️ WARNING: Failed to delete OLD session from DB: " + e.getMessage());
+            }
+            System.out.println("🧹 Removed old session for user: " + userId);
+        }
+    }
+
     public void setMatchId(String sessionId, String matchId) {
         SessionContext context = activeSessions.get(sessionId);
         if (context != null) {
             context.setCurrentMatchId(matchId);
-            // TODO (Nâng cao): Cập nhật trạng thái 'IN_GAME' trong bảng active_sessions
+            // TODO: Cập nhật status='IN_GAME' trong DB
         }
     }
 
-    public int getActiveSessionCount() {
-        return activeSessions.size();
-    }
+    public int getActiveSessionCount() { return activeSessions.size(); }
+    public Collection<SessionContext> getAllSessions() { return activeSessions.values(); }
 
-    // --- THÊM HÀM NÀY VÀO ---
-    /**
-     * Lấy danh sách tất cả các SessionContext đang hoạt động.
-     * Chỉ nên được sử dụng bởi các service nội bộ (như MatchmakingService).
-     * @return Một Collection chứa các SessionContext.
-     */
-    public Collection<SessionContext> getAllSessions() {
-        return activeSessions.values();
-    }
-    // -------------------------
 
     private void persistSessionToDB(String sessionId, String userId) throws SQLException {
+        // THAY ĐỔI: Xóa cột 'created_at' khỏi câu lệnh INSERT
         String sql = """
-            INSERT INTO active_sessions (session_id, user_id, status, last_heartbeat, created_at)
-            VALUES (?, ?, 'IN_LOBBY', NOW(), NOW())
+            INSERT INTO active_sessions (session_id, user_id, status, last_heartbeat)
+            VALUES (?, ?, 'IN_LOBBY', NOW())
             ON DUPLICATE KEY UPDATE last_heartbeat = NOW(), status = 'IN_LOBBY'
             """;
         try (Connection conn = dbManager.getConnection();
@@ -141,3 +135,4 @@ public class SessionManager {
         }
     }
 }
+
