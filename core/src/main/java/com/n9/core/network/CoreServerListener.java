@@ -54,9 +54,10 @@ public class CoreServerListener implements Runnable {
             try {
                 Socket clientSocket = serverSocket.accept();
 
-                // THAY ĐỔI: ĐÃ XÓA DÒNG clientSocket.setSoTimeout(30000);
+                // bỏ clientSocket.setSoTimeout(30000);
                 // Chúng ta sẽ dựa vào Heartbeat để quản lý kết nối.
 
+                // khi client (gateway kết nối đến core thì core sẽ khởi tạo 1 luồng riêng biệt duy nhất để chạy ClientConnectionHandler
                 ClientConnectionHandler handler = new ClientConnectionHandler(
                         clientSocket,
                         gameService,
@@ -67,7 +68,7 @@ public class CoreServerListener implements Runnable {
                         activeConnections
                 );
 
-                pool.submit(handler);
+                pool.submit(handler); // pool.submit(handler); sẽ tự động gọi run() của runnable
 
             } catch (IOException e) {
                 if (running) {

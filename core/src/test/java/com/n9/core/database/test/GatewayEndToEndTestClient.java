@@ -173,6 +173,12 @@ public class GatewayEndToEndTestClient {
             }
         };
 
+        // QUAN TRỌNG: Tắt hoặc tăng connection lost timeout cho debug
+        // Default = 60 giây, tăng lên 300 giây (5 phút) để có thể debug thoải mái
+        // Set 0 = vô hiệu hóa hoàn toàn (không khuyến khích cho production)
+        client.setConnectionLostTimeout(300); // 5 phút
+        System.out.println("⚙️ Connection lost timeout set to 300 seconds (for debugging)");
+
         client.connectBlocking();
     }
 

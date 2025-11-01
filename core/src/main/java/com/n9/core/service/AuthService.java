@@ -100,7 +100,8 @@ public class AuthService {
         }
 
         String sql = """
-            SELECT u.user_id, u.username, u.email, u.password_hash, u.status, up.display_name
+            SELECT u.user_id, u.username, u.email, u.password_hash, u.status, 
+                   up.display_name, up.total_score, up.games_played, up.games_won
             FROM users u
             JOIN user_profiles up ON u.user_id = up.user_id
             WHERE u.username = ?
@@ -119,6 +120,11 @@ public class AuthService {
                     String email = rs.getString("email");
                     String displayName = rs.getString("display_name");
                     String status = rs.getString("status");
+                    
+                    // Get user stats
+                    Integer totalScore = rs.getInt("total_score");
+                    Integer gamesPlayed = rs.getInt("games_played");
+                    Integer gamesWon = rs.getInt("games_won");
 
                     if (!"ACTIVE".equalsIgnoreCase(status)) {
                         throw new IllegalArgumentException("Account is currently " + status.toLowerCase() + ".");
@@ -132,9 +138,12 @@ public class AuthService {
                         response.setUsername(username);
                         response.setEmail(email);
                         response.setDisplayName(displayName);
+                        response.setScore(totalScore != null ? totalScore.doubleValue() : 0.0);
+                        response.setGamesPlayed(gamesPlayed != null ? gamesPlayed : 0);
+                        response.setGamesWon(gamesWon != null ? gamesWon : 0);
                         response.setTimestamp(System.currentTimeMillis());
 
-                        System.out.println("✅ User logged in: " + username + " (ID: " + userId + ")");
+                        System.out.println("✅ User logged in: " + username + " (ID: " + userId + ", Games: " + gamesPlayed + ", Wins: " + gamesWon + ")");
                         return response;
                     } else {
                         throw new IllegalArgumentException("Invalid username or password.");

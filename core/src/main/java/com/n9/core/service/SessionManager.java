@@ -1,6 +1,7 @@
 package com.n9.core.service;
 
 import com.n9.core.database.DatabaseManager;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -10,25 +11,50 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * SessionManager - Quản lý các phiên làm việc (session).
- * @version 1.1.2 (Fixed DB query, added user mapping)
  */
 public class SessionManager {
 
     public static class SessionContext {
-        private final String sessionId; private final String userId; private final String username;
-        private String currentMatchId; private long lastActivityTimestamp;
-        public SessionContext(String sid, String uid, String uname) { this.sessionId=sid; this.userId=uid; this.username=uname; this.lastActivityTimestamp=System.currentTimeMillis(); }
-        public void updateActivity() { this.lastActivityTimestamp = System.currentTimeMillis(); }
-        public String getSessionId() { return sessionId; }
-        public String getUserId() { return userId; }
-        public String getUsername() { return username; }
-        public String getCurrentMatchId() { return currentMatchId; }
-        public void setCurrentMatchId(String mid) { this.currentMatchId = mid; }
+        private final String sessionId;
+        private final String userId;
+        private final String username;
+        private String currentMatchId;
+        private long lastActivityTimestamp;
+
+        public SessionContext(String sid, String uid, String uname) {
+            this.sessionId = sid;
+            this.userId = uid;
+            this.username = uname;
+            this.lastActivityTimestamp = System.currentTimeMillis();
+        }
+
+        public void updateActivity() {
+            this.lastActivityTimestamp = System.currentTimeMillis();
+        }
+
+        public String getSessionId() {
+            return sessionId;
+        }
+
+        public String getUserId() {
+            return userId;
+        }
+
+        public String getUsername() {
+            return username;
+        }
+
+        public String getCurrentMatchId() {
+            return currentMatchId;
+        }
+
+        public void setCurrentMatchId(String mid) {
+            this.currentMatchId = mid;
+        }
     }
 
     private final ConcurrentHashMap<String, SessionContext> activeSessions;
-    // THÊM: Map tra cứu ngược: userId -> SessionContext
-    private final ConcurrentHashMap<String, SessionContext> userSessionMap;
+    private final ConcurrentHashMap<String, SessionContext> userSessionMap; // Map tra cứu ngược: userId -> SessionContext
     private final DatabaseManager dbManager;
 
     public SessionManager(DatabaseManager dbManager) {
@@ -62,6 +88,7 @@ public class SessionManager {
     }
 
     // --- THÊM HÀM MỚI ---
+
     /**
      * Lấy SessionContext bằng userId.
      */
@@ -107,17 +134,22 @@ public class SessionManager {
         }
     }
 
-    public int getActiveSessionCount() { return activeSessions.size(); }
-    public Collection<SessionContext> getAllSessions() { return activeSessions.values(); }
+    public int getActiveSessionCount() {
+        return activeSessions.size();
+    }
+
+    public Collection<SessionContext> getAllSessions() {
+        return activeSessions.values();
+    }
 
 
     private void persistSessionToDB(String sessionId, String userId) throws SQLException {
         // THAY ĐỔI: Xóa cột 'created_at' khỏi câu lệnh INSERT
         String sql = """
-            INSERT INTO active_sessions (session_id, user_id, status, last_heartbeat)
-            VALUES (?, ?, 'IN_LOBBY', NOW())
-            ON DUPLICATE KEY UPDATE last_heartbeat = NOW(), status = 'IN_LOBBY'
-            """;
+                INSERT INTO active_sessions (session_id, user_id, status, last_heartbeat)
+                VALUES (?, ?, 'IN_LOBBY', NOW())
+                ON DUPLICATE KEY UPDATE last_heartbeat = NOW(), status = 'IN_LOBBY'
+                """;
         try (Connection conn = dbManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, sessionId);
