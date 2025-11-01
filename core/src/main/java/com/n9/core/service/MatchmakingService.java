@@ -46,8 +46,11 @@ public class MatchmakingService {
     }
 
     public void startMatchmakingLoop() {
+        // scheduleAtFixedRate(Runnable task, long initialDelay, long period, TimeUnit unit)
+        // initialDelay: Thời gian chờ trước khi chạy lần đầu tiên.
+        // period: Chu kỳ lặp lại.
         scheduler.scheduleAtFixedRate(this::tryMatchmaking, 1, 1, TimeUnit.SECONDS);
-        System.out.println("✅ Matchmaking loop started.");
+        System.out.println("✅ Matchmaking loop started (scanning every 5 seconds).");
     }
 
     public boolean requestMatch(String userId) {

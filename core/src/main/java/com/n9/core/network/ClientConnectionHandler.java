@@ -227,6 +227,8 @@ public class ClientConnectionHandler implements Runnable {
     // (Tất cả các hàm handler: handleRegister, handleLogin, handleLogout,
     // handleMatchRequest, handlePlayCard đều giữ nguyên)
     // ...
+
+    // đăng kí xong mới sessionId
     private MessageEnvelope handleRegister(MessageEnvelope envelope) throws Exception {
         RegisterRequestDto dto = JsonUtils.getObjectMapper().convertValue(envelope.getPayload(), RegisterRequestDto.class);
         var responseDto = authService.register(dto.getUsername(), dto.getEmail(), dto.getPassword(), dto.getDisplayName());

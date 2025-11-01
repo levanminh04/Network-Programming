@@ -34,6 +34,9 @@ public class GatewayWebSocketHandler extends TextWebSocketHandler {
         System.out.println("Frontend connected: " + session.getId());
     }
 
+
+    // handleTextMessage là phương thức được Spring Framework tự động gọi bất cứ khi nào
+    // máy chủ của bạn nhận được một tin nhắn dạng văn bản (text) từ một client (ví dụ: trình duyệt web) thông qua kết nối WebSocket.
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         String jsonPayload = message.getPayload();

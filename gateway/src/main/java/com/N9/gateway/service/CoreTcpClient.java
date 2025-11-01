@@ -24,7 +24,8 @@ public class CoreTcpClient implements InitializingBean, DisposableBean {
     private static final String CORE_HOST = "localhost";
     private static final int CORE_PORT = 9090;
     // THÊM: Hằng số cho Heartbeat
-    private static final int HEARTBEAT_INTERVAL_SECONDS = 15;
+    // NOTE: Tăng lên 60 giây để giảm nhiễu khi debug (production nên giữ 15-30s)
+    private static final int HEARTBEAT_INTERVAL_SECONDS = 300;
 
     private Socket socket;
     private DataOutputStream out;
