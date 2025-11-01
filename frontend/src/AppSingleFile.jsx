@@ -518,6 +518,8 @@ const useWebSocket = (dispatch, sessionId) => {
                 type: 'SET_ERROR',
                 payload: envelope.error?.message || 'Lỗi hệ thống'
               });
+              // Reset loading state to allow retry
+              dispatch({ type: 'SET_LOADING', payload: false });
               break;
             
             default:
@@ -586,6 +588,10 @@ const AuthView = () => {
 
   const handleLogin = (e) => {
     e.preventDefault();
+    
+    // Clear previous errors
+    dispatch({ type: 'CLEAR_ERROR' });
+    
     if (!formData.username || !formData.password) {
       dispatch({ type: 'SET_ERROR', payload: 'Vui lòng nhập username và password' });
       return;
@@ -604,6 +610,10 @@ const AuthView = () => {
 
   const handleRegister = (e) => {
     e.preventDefault();
+    
+    // Clear previous errors
+    dispatch({ type: 'CLEAR_ERROR' });
+    
     if (!formData.username || !formData.password || !formData.email) {
       dispatch({ type: 'SET_ERROR', payload: 'Vui lòng điền đầy đủ thông tin' });
       return;
@@ -635,7 +645,11 @@ const AuthView = () => {
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
-            onClick={() => setActiveTab('login')}
+            onClick={() => {
+              setActiveTab('login');
+              dispatch({ type: 'CLEAR_ERROR' });
+              dispatch({ type: 'CLEAR_MESSAGE' });
+            }}
           >
             Đăng nhập
           </button>
@@ -645,7 +659,11 @@ const AuthView = () => {
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
-            onClick={() => setActiveTab('register')}
+            onClick={() => {
+              setActiveTab('register');
+              dispatch({ type: 'CLEAR_ERROR' });
+              dispatch({ type: 'CLEAR_MESSAGE' });
+            }}
           >
             Đăng ký
           </button>
@@ -675,7 +693,7 @@ const AuthView = () => {
                 name="username"
                 value={formData.username}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
                 placeholder="Nhập username"
                 disabled={state.loading}
               />
@@ -689,7 +707,7 @@ const AuthView = () => {
                 name="password"
                 value={formData.password}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
                 placeholder="Nhập password"
                 disabled={state.loading}
               />
@@ -716,7 +734,7 @@ const AuthView = () => {
                 name="username"
                 value={formData.username}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
                 placeholder="3-50 ký tự"
                 disabled={state.loading}
               />
@@ -730,7 +748,7 @@ const AuthView = () => {
                 name="email"
                 value={formData.email}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
                 placeholder="email@example.com"
                 disabled={state.loading}
               />
@@ -744,7 +762,7 @@ const AuthView = () => {
                 name="password"
                 value={formData.password}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
                 placeholder="Tối thiểu 6 ký tự"
                 disabled={state.loading}
               />
@@ -758,7 +776,7 @@ const AuthView = () => {
                 name="displayName"
                 value={formData.displayName}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
                 placeholder="Mặc định là username"
                 disabled={state.loading}
               />
