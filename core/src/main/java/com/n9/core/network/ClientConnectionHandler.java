@@ -247,7 +247,7 @@ public class ClientConnectionHandler implements Runnable {
         PlayCardRequestDto dto = JsonUtils.getObjectMapper().convertValue(envelope.getPayload(), PlayCardRequestDto.class);
 
         try {
-            // gameService.playCard() sẽ ném Exception nếu thất bại, và tự gửi response/notification
+            // gameService.playCard() sẽ ném Exception nếu thất bại và tự gửi response/notification
             gameService.playCard(dto.getGameId(), context.getUserId(), dto.getCardId());
             return null; // Success: worker thread sẽ không gửi gì (GameService đã gửi)
             
@@ -264,7 +264,7 @@ public class ClientConnectionHandler implements Runnable {
         }
     }
 
-    // ... (sendMessage và cleanup giữ nguyên)
+
     public synchronized void sendMessage(String jsonMessage) {
         try {
             if (out != null && !socket.isClosed()) {
