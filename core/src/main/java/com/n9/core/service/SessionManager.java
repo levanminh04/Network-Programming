@@ -74,9 +74,8 @@ public class SessionManager {
         try {
             persistSessionToDB(sessionId, userId);
         } catch (SQLException e) {
-            System.err.println("⚠️ WARNING: Failed to persist session to DB: " + e.getMessage());
+            e.printStackTrace();
         }
-        System.out.println("✅ Session created: " + sessionId + " for user: " + username);
         return sessionId;
     }
 
@@ -87,7 +86,6 @@ public class SessionManager {
         return context;
     }
 
-    // --- THÊM HÀM MỚI ---
 
     /**
      * Lấy SessionContext bằng userId.
@@ -96,19 +94,17 @@ public class SessionManager {
         if (userId == null) return null;
         return userSessionMap.get(userId);
     }
-    // --------------------
 
     public void removeSession(String sessionId) {
         if (sessionId == null) return;
-        SessionContext removedContext = activeSessions.remove(sessionId);
+        SessionContext removedContext = activeSessions.remove(sessionId); // remove trả về key cua value bị xóa
         if (removedContext != null) {
             userSessionMap.remove(removedContext.getUserId());
             try {
                 deleteSessionFromDB(sessionId);
             } catch (SQLException e) {
-                System.err.println("⚠️ WARNING: Failed to delete session from DB: " + e.getMessage());
+                e.printStackTrace();
             }
-            System.out.println("🧹 Session removed for user: " + removedContext.getUsername());
         }
     }
 
@@ -120,9 +116,8 @@ public class SessionManager {
             try {
                 deleteSessionFromDB(oldContext.getSessionId());
             } catch (SQLException e) {
-                System.err.println("⚠️ WARNING: Failed to delete OLD session from DB: " + e.getMessage());
+                e.printStackTrace();
             }
-            System.out.println("🧹 Removed old session for user: " + userId);
         }
     }
 
@@ -130,7 +125,6 @@ public class SessionManager {
         SessionContext context = activeSessions.get(sessionId);
         if (context != null) {
             context.setCurrentMatchId(matchId);
-            // TODO: Cập nhật status='IN_GAME' trong DB
         }
     }
 
@@ -144,7 +138,6 @@ public class SessionManager {
 
 
     private void persistSessionToDB(String sessionId, String userId) throws SQLException {
-        // THAY ĐỔI: Xóa cột 'created_at' khỏi câu lệnh INSERT
         String sql = """
                 INSERT INTO active_sessions (session_id, user_id, status, last_heartbeat)
                 VALUES (?, ?, 'IN_LOBBY', NOW())

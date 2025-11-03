@@ -26,16 +26,14 @@ import java.io.IOException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 
-/**
- * ClientConnectionHandler - Xử lý kết nối TCP từ Gateway.
- * Triển khai mô hình I/O Thread + Worker Pool và Length-Prefixed Framing.
- *
- * @version 1.4.1 (Fixed Heartbeat and Buffering)
- */
+
+
 public class ClientConnectionHandler implements Runnable {
 
     private final Socket socket;
@@ -48,7 +46,6 @@ public class ClientConnectionHandler implements Runnable {
 
     private DataInputStream in;
     private DataOutputStream out;
-    private String currentSessionId = null;
 
     public ClientConnectionHandler(
             Socket socket,
@@ -71,7 +68,6 @@ public class ClientConnectionHandler implements Runnable {
     @Override
     public void run() {
         String clientAddress = socket.getRemoteSocketAddress().toString();
-        System.out.println("✅ I/O Thread started for connection from: " + clientAddress);
 
         try {
             in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
@@ -82,7 +78,6 @@ public class ClientConnectionHandler implements Runnable {
             while (!socket.isClosed()) {
                 int length = in.readInt();
 
-                // THAY ĐỔI: Bỏ comment kiểm tra kích thước
                 if (length > GameConstants.MAX_MESSAGE_SIZE) {
                     throw new IOException("Message size exceeds limit: " + length);
                 }
@@ -92,7 +87,6 @@ public class ClientConnectionHandler implements Runnable {
                     in.readFully(messageBytes, 0, length);
                     final String messageLine = new String(messageBytes, StandardCharsets.UTF_8);
 
-                    System.out.println("📨 I/O Thread received message of length: " + length);
 
                     Runnable processingTask = () -> {
                         MessageEnvelope request = null;
@@ -106,17 +100,15 @@ public class ClientConnectionHandler implements Runnable {
                                 response = handleMessage(request);
                             }
                         } catch (Exception e) {
-                            System.err.println("❌ Worker thread caught error: " + e.getMessage());
                             response = MessageFactory.createErrorResponse(request, "INTERNAL_SERVER_ERROR", "An unexpected error occurred.");
                         }
 
-                        // THAY ĐỔI: Chỉ gửi nếu response không null và có type
+                        // Chỉ gửi nếu response không null và có type
                         if (response != null && response.getType() != null) {
                             try {
                                 String jsonResponse = JsonUtils.toJson(response);
                                 sendMessage(jsonResponse);
                             } catch (JsonProcessingException e) {
-                                System.err.println("❌ Worker thread failed to serialize response: " + e.getMessage());
                             }
                         }
                         // Nếu response là null (ví dụ từ handlePlayCard), worker thread sẽ không làm gì cả.
@@ -124,12 +116,7 @@ public class ClientConnectionHandler implements Runnable {
                     pool.submit(processingTask);
                 }
             }
-        } catch (EOFException e) {
-            System.out.println("🔌 Gateway closed the connection gracefully: " + clientAddress);
-        } catch (IOException e) {
-            System.err.println("❌ Connection lost with " + clientAddress + ": " + e.getMessage());
         } catch (Exception e) {
-            System.err.println("❌ Unexpected error in I/O loop for " + clientAddress);
             e.printStackTrace();
         } finally {
             cleanup(clientAddress);
@@ -145,7 +132,7 @@ public class ClientConnectionHandler implements Runnable {
 
         try {
             switch (type) {
-                // --- AUTH DOMAIN ---
+                // --- AUTH ---
                 case MessageProtocol.Type.AUTH_REGISTER_REQUEST:
                     response = handleRegister(envelope);
                     break;
@@ -156,18 +143,17 @@ public class ClientConnectionHandler implements Runnable {
                     response = handleLogout(envelope);
                     break;
 
-                // --- LOBBY DOMAIN ---
+                // --- LOBBY ---
                 case MessageProtocol.Type.LOBBY_MATCH_REQUEST:
                     response = handleMatchRequest(envelope);
                     break;
                 // TODO: Thêm case LOBBY_MATCH_CANCEL
 
-                // --- GAME DOMAIN ---
+                // --- GAME ---
                 case MessageProtocol.Type.GAME_CARD_PLAY_REQUEST:
                     response = handlePlayCard(envelope);
                     break;
 
-                // --- THAY ĐỔI: THÊM CASE CHO PING ---
                 case MessageProtocol.Type.SYSTEM_PING:
                     System.out.println("💓 Received PING from Gateway. Sending PONG.");
                     response = MessageFactory.createResponse(envelope, MessageProtocol.Type.SYSTEM_PONG, null);
@@ -177,35 +163,12 @@ public class ClientConnectionHandler implements Runnable {
                     response = MessageFactory.createErrorResponse(envelope, "UNKNOWN_TYPE", "Unknown message type: " + type);
             }
         } catch (IllegalArgumentException e) {
-            System.err.println("⚠️ Business logic error ["+ type +"]: " + e.getMessage());
             response = MessageFactory.createErrorResponse(envelope, "VALIDATION_ERROR", e.getMessage());
         } catch (Exception e) {
-            System.err.println("❌ Critical error in handler ["+ type +"]: " + e.getMessage());
             e.printStackTrace();
             response = MessageFactory.createErrorResponse(envelope, "INTERNAL_SERVER_ERROR", "An unexpected server error occurred.");
         }
 
-        // Cập nhật 'activeConnections' map sau khi Auth thành công
-        // THAY ĐỔI: Kiểm tra type của PHẢN HỒI (response.getType())
-        if (response != null && response.getError() == null &&
-                (response.getType().equals(MessageProtocol.Type.AUTH_LOGIN_SUCCESS) || response.getType().equals(MessageProtocol.Type.AUTH_REGISTER_SUCCESS)))
-        {
-            SessionManager.SessionContext context = sessionManager.getSession(response.getSessionId());
-            if (context != null) {
-                String userId = context.getUserId();
-                this.currentSessionId = response.getSessionId();
-                activeConnections.put(userId, this);
-                System.out.println("🔗 User " + userId + " associated with connection: " + socket.getRemoteSocketAddress());
-            } else {
-                System.err.println("⚠️ Login/Register success but session context not found for sid: " + response.getSessionId());
-            }
-        }
-        else if (response != null && response.getSessionId() != null && response.getError() == null) {
-            // Cập nhật sessionId cho các request khác (ví dụ: client gửi PING với session cũ,
-            // nhưng response từ LOGIN/REGISTER (cùng 1 client) đã có session mới)
-            // Logic này có thể cần xem xét lại, nhưng việc lưu currentSessionId là tốt
-            this.currentSessionId = response.getSessionId();
-        }
         return response;
     }
 
@@ -217,24 +180,19 @@ public class ClientConnectionHandler implements Runnable {
             String json = JsonUtils.toJson(welcome);
             sendMessage(json);
         } catch (JsonProcessingException e) {
-            System.err.println("❌ Failed to serialize WELCOME message: " + e.getMessage());
         }
     }
 
-    // ============================================================================
-    // AUTH HANDLERS (GỌI SERVICE)
-    // ============================================================================
-    // (Tất cả các hàm handler: handleRegister, handleLogin, handleLogout,
-    // handleMatchRequest, handlePlayCard đều giữ nguyên)
-    // ...
 
     // đăng kí xong mới sessionId
     private MessageEnvelope handleRegister(MessageEnvelope envelope) throws Exception {
         RegisterRequestDto dto = JsonUtils.getObjectMapper().convertValue(envelope.getPayload(), RegisterRequestDto.class);
         var responseDto = authService.register(dto.getUsername(), dto.getEmail(), dto.getPassword(), dto.getDisplayName());
-        String sessionId = sessionManager.createSession(responseDto.getUserId(), responseDto.getUsername());
+//        String sessionId = sessionManager.createSession(responseDto.getUserId(), responseDto.getUsername());
+        
         MessageEnvelope response = MessageFactory.createResponse(envelope, MessageProtocol.Type.AUTH_REGISTER_SUCCESS, responseDto);
-        response.setSessionId(sessionId);
+//        response.setSessionId(sessionId);
+//        activeConnections.put(responseDto.getUserId(), this);
         return response;
     }
 
@@ -242,16 +200,33 @@ public class ClientConnectionHandler implements Runnable {
         LoginRequestDto dto = JsonUtils.getObjectMapper().convertValue(envelope.getPayload(), LoginRequestDto.class);
         var responseDto = authService.login(dto.getUsername(), dto.getPassword());
         String sessionId = sessionManager.createSession(responseDto.getUserId(), responseDto.getUsername());
+        
         MessageEnvelope response = MessageFactory.createResponse(envelope, MessageProtocol.Type.AUTH_LOGIN_SUCCESS, responseDto);
         response.setSessionId(sessionId);
+        
+        activeConnections.put(responseDto.getUserId(), this);
+
         return response;
     }
 
     private MessageEnvelope handleLogout(MessageEnvelope envelope) {
         SessionManager.SessionContext context = sessionManager.getSession(envelope.getSessionId());
         if (context != null) {
+            String userId = context.getUserId();
+            String matchId = context.getCurrentMatchId();
+            
+
+            // Xử lý forfeit nếu đang trong trận
+            if (matchId != null) {
+                gameService.handleForfeit(matchId, userId);
+            }
+            
+            // Hủy matchmaking nếu đang chờ
+            matchmakingService.cancelMatch(userId);
+            
+            // Xóa khỏi activeConnections và session
+            activeConnections.remove(userId);
             sessionManager.removeSession(context.getSessionId());
-            activeConnections.remove(context.getUserId());
         }
         return MessageFactory.createResponse(envelope, MessageProtocol.Type.AUTH_LOGOUT_SUCCESS, null);
     }
@@ -263,7 +238,6 @@ public class ClientConnectionHandler implements Runnable {
         if (!success) {
             throw new IllegalArgumentException("You are already in the matchmaking queue.");
         }
-        // THAY ĐỔI: Sử dụng Type đã chuẩn hóa
         return MessageFactory.createResponse(envelope, MessageProtocol.Type.LOBBY_MATCH_REQUEST_ACK, Map.of("status", "SEARCHING"));
     }
 
@@ -279,8 +253,6 @@ public class ClientConnectionHandler implements Runnable {
             
         } catch (IllegalArgumentException e) {
             // Card không hợp lệ → Gửi FAILURE với cơ chế retry
-            System.err.println("⚠️ Invalid card selection [" + dto.getCardId() + "]: " + e.getMessage());
-            
             Map<String, Object> failurePayload = new HashMap<>();
             failurePayload.put("gameId", dto.getGameId());
             failurePayload.put("cardId", dto.getCardId());
@@ -303,30 +275,54 @@ public class ClientConnectionHandler implements Runnable {
                 out.flush();
             }
         } catch (IOException e) {
-            System.err.println("❌ Failed to send message to " + socket.getRemoteSocketAddress() + ": " + e.getMessage());
         }
     }
 
     private void cleanup(String clientAddress) {
-        if (this.currentSessionId != null) {
-            SessionManager.SessionContext context = sessionManager.getSession(this.currentSessionId);
-            if (context != null) {
-                if (context.getCurrentMatchId() != null) {
-                    gameService.handleForfeit(context.getCurrentMatchId(), context.getUserId());
-                }
-                matchmakingService.cancelMatch(context.getUserId());
-                activeConnections.remove(context.getUserId());
-                System.out.println("🔗 Removed connection mapping for user: " + context.getUserId());
-                sessionManager.removeSession(this.currentSessionId);
+
+        // Tạo danh sách users thuộc connection này (tránh ConcurrentModificationException)
+        Set<String> usersToCleanup = new HashSet<>();
+        
+        for (Map.Entry<String, ClientConnectionHandler> entry : activeConnections.entrySet()) {
+            if (entry.getValue() == this) { // Chỉ lấy users của connection NÀY
+                usersToCleanup.add(entry.getKey());
             }
         }
+        
+        // Dọn dẹp từng user
+        for (String userId : usersToCleanup) {
+
+            // Tìm session context từ SessionManager
+            SessionManager.SessionContext context = null;
+            for (SessionManager.SessionContext ctx : sessionManager.getAllSessions()) {
+                if (ctx.getUserId().equals(userId)) {
+                    context = ctx;
+                    break;
+                }
+            }
+            
+            if (context != null) {
+                // Xử lý forfeit nếu đang trong game
+                if (context.getCurrentMatchId() != null) {
+                    gameService.handleForfeit(context.getCurrentMatchId(), userId);
+                }
+                
+                // Hủy matchmaking nếu đang chờ
+                matchmakingService.cancelMatch(userId);
+                
+                // Xóa session
+                sessionManager.removeSession(context.getSessionId());
+            }
+            
+            // Xóa khỏi activeConnections
+            activeConnections.remove(userId);
+        }
+        
         try {
             if (in != null) in.close();
             if (out != null) out.close();
             if (socket != null && !socket.isClosed()) socket.close();
-            System.out.println("🧹 Connection cleaned up for: " + clientAddress);
         } catch (IOException e) {
-            System.err.println("❌ Error during cleanup: " + e.getMessage());
         }
     }
 }

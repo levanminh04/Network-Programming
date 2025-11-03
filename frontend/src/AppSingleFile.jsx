@@ -29,6 +29,8 @@ const MessageType = {
   GAME_OPPONENT_READY: 'GAME.OPPONENT_READY',
   GAME_END: 'GAME.END',
   GAME_OPPONENT_LEFT: 'GAME.OPPONENT_LEFT',
+  GAME_FORFEIT_REQUEST: 'GAME.FORFEIT_REQUEST',
+  GAME_FORFEIT_SUCCESS: 'GAME.FORFEIT_SUCCESS',
   
   // SYSTEM DOMAIN
   SYSTEM_WELCOME: 'SYSTEM.WELCOME',
@@ -184,8 +186,8 @@ const appReducer = (state, action) => {
         ...state,
         matchFound: true,
         matchId: action.payload.matchId,
-        opponentUsername: action.payload.opponentUsername,
-        message: `Đã tìm thấy đối thủ: ${action.payload.opponentUsername}!`
+        opponentUsername: action.payload.opponent?.username || 'Unknown',
+        message: `Đã tìm thấy đối thủ: ${action.payload.opponent?.username || 'Unknown'}!`
       };
     
     // Game Actions
@@ -197,7 +199,7 @@ const appReducer = (state, action) => {
         gameId: action.payload.gameId || action.payload.matchId,
         matchId: action.payload.matchId,
         yourPosition: action.payload.yourPosition, // 1 or 2
-        opponentUsername: action.payload.opponentUsername || state.opponentUsername,
+        opponentUsername: action.payload.opponent?.username || state.opponentUsername || 'Unknown',
         matchmaking: false,
         matchFound: false,
         currentRound: 0,
@@ -228,6 +230,8 @@ const appReducer = (state, action) => {
         roundResult: null,
         playerScore: action.payload.playerScore || state.playerScore,
         opponentScore: action.payload.opponentScore || state.opponentScore,
+        // Keep opponentUsername from state, don't overwrite
+        opponentUsername: state.opponentUsername,
         message: action.payload.message || `Round ${action.payload.roundNumber} - Chọn bài của bạn!`
       };
     
@@ -1004,6 +1008,32 @@ const GameView = () => {
     dispatch({ type: 'RETURN_TO_LOBBY' });
   };
 
+  const handleSurrender = () => {
+    if (!confirm('Bạn có chắc muốn đầu hàng? Bạn sẽ thua trận này.')) {
+      return;
+    }
+    
+    // Send forfeit request to server
+    const payload = {
+      gameId: state.gameId,
+      matchId: state.matchId,
+      timestamp: Date.now()
+    };
+    
+    console.log('🏳️ Surrendering game:', payload);
+    sendMessage(MessageType.GAME_FORFEIT_REQUEST, payload);
+    
+    // Show message and return to lobby after a delay
+    dispatch({
+      type: 'SET_MESSAGE',
+      payload: 'Đã đầu hàng. Quay về sảnh...'
+    });
+    
+    setTimeout(() => {
+      dispatch({ type: 'RETURN_TO_LOBBY' });
+    }, 2000);
+  };
+
   const isCardDisabled = (cardId) => {
     // Disable if already selected a card
     if (state.selectedCardId || state.playerCard) return true;
@@ -1043,6 +1073,16 @@ const GameView = () => {
             >
               {showAllCards ? '👁️ Debug: ON' : '👁️ Debug: OFF'}
             </button>
+            {/* Surrender Button */}
+            {!state.gameResult && (
+              <button
+                onClick={handleSurrender}
+                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition-colors"
+                title="Đầu hàng và thoát khỏi trận đấu"
+              >
+                🏳️ Đầu hàng
+              </button>
+            )}
           </div>
           <div className="flex items-center space-x-8">
             <div className="text-center">
@@ -1206,6 +1246,40 @@ const AppSingleFile = () => {
     ws.send(JSON.stringify(message));
     console.log('📨 Sent:', type);
   };
+
+  // Handle beforeunload: Auto-logout when user closes tab/browser
+  useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      if (state.isAuthenticated && state.sessionId) {
+        // Send logout request synchronously
+        const logoutMessage = createRequest(
+          MessageType.AUTH_LOGOUT_REQUEST, 
+          {}, 
+          state.sessionId
+        );
+        
+        // Use sendBeacon for reliable delivery during page unload
+        if (navigator.sendBeacon) {
+          // sendBeacon only works with HTTP, so we'll use fetch with keepalive
+          const wsUrl = 'ws://localhost:8080/ws';
+          // We can't use sendBeacon with WebSocket, so use sync XHR as fallback
+        }
+        
+        // Try to send via existing WebSocket if still open
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(logoutMessage));
+        }
+        
+        console.log('🚪 Auto-logout on tab close');
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [state.isAuthenticated, state.sessionId, ws]);
 
   const contextValue = {
     state,

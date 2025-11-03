@@ -19,11 +19,14 @@ public class GatewayWebSocketHandler extends TextWebSocketHandler {
 
     private final CoreTcpClient coreTcpClient;
 
-    // "Cuốn sổ" ghi nhớ: correlationId -> WebSocketSession của client nào đã gửi
+    // sổ ghi nhớ: correlationId -> WebSocketSession của client nào đã gửi
     private final ConcurrentHashMap<String, WebSocketSession> pendingRequests = new ConcurrentHashMap<>();
 
-    // "Danh bạ" ghi nhớ: sessionId -> WebSocketSession (để gửi thông báo đẩy)
+    // Danh bạ ghi nhớ: sessionId -> WebSocketSession (để gửi thông báo đẩy)
     private final ConcurrentHashMap<String, WebSocketSession> activeClientSessions = new ConcurrentHashMap<>();
+
+    // WebSocket session ID -> sessionId (để cleanup khi disconnect)
+    private final ConcurrentHashMap<String, String> sessionWsMap = new ConcurrentHashMap<>();
 
     public GatewayWebSocketHandler(CoreTcpClient coreTcpClient) {
         this.coreTcpClient = coreTcpClient;
@@ -36,7 +39,7 @@ public class GatewayWebSocketHandler extends TextWebSocketHandler {
 
 
     // handleTextMessage là phương thức được Spring Framework tự động gọi bất cứ khi nào
-    // máy chủ của bạn nhận được một tin nhắn dạng văn bản (text) từ một client (ví dụ: trình duyệt web) thông qua kết nối WebSocket.
+    // máy chủ nhận được một tin nhắn dạng văn bản (text) từ một client (ví dụ: trình duyệt web) thông qua kết nối WebSocket.
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         String jsonPayload = message.getPayload();
@@ -51,21 +54,23 @@ public class GatewayWebSocketHandler extends TextWebSocketHandler {
                 pendingRequests.put(envelope.getCorrelationId(), session);
             }
 
-            // Nếu client gửi sessionId, cập nhật "danh bạ" của chúng ta
+            // Nếu client gửi sessionId, cập nhật danh bạ
             if (envelope.getSessionId() != null) {
                 activeClientSessions.put(envelope.getSessionId(), session);
+                // Lưu reverse mapping để cleanup sau này
+                sessionWsMap.put(session.getId(), envelope.getSessionId());
             }
 
             // Chuyển tiếp tin nhắn y hệt đến Core Server
             coreTcpClient.sendMessageToCore(jsonPayload);
         } catch (Exception e) {
-            System.err.println("❌ Error processing message from Frontend: " + e.getMessage());
+
         }
     }
 
     /**
      * Được CoreTcpClient gọi khi có tin nhắn từ Core.
-     * Nhiệm vụ: Tìm đúng client để gửi tin nhắn trả về.
+     * Tìm đúng client để gửi tin nhắn trả về.
      */
     public void forwardMessageToClient(String jsonMessageFromCore) {
         try {
@@ -94,11 +99,10 @@ public class GatewayWebSocketHandler extends TextWebSocketHandler {
                     pendingRequests.remove(envelope.getCorrelationId());
                 }
             } else {
-                // TODO: Xử lý trường hợp broadcast (gửi cho tất cả mọi người)
                 System.out.println("No client session found for message. It might be a broadcast or the client disconnected.");
             }
         } catch (Exception e) {
-            System.err.println("❌ Failed to forward message to client: " + e.getMessage());
+
         }
     }
 
@@ -106,8 +110,32 @@ public class GatewayWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         System.out.println("Frontend disconnected: " + session.getId() + " with status: " + status);
 
-        // Dọn dẹp: Xóa session này khỏi tất cả các map quản lý
+
+        // 1. Tìm sessionId của kết nối vừa đóng
+        String sessionId = sessionWsMap.remove(session.getId());
+        
+        if (sessionId != null) {
+            // 2. Xóa khỏi map "danh bạ"
+            activeClientSessions.remove(sessionId);
+            System.out.println("   Cleaning up session mapping for: " + sessionId);
+
+            // 3. Tạo và gửi một tin nhắn AUTH.LOGOUT đến Core
+            // Core sẽ nhận tin này và kích hoạt logic cleanup (bao gồm cả forfeit)
+            try {
+                MessageEnvelope logoutEnvelope = new MessageEnvelope();
+                logoutEnvelope.setType(MessageProtocol.Type.AUTH_LOGOUT_REQUEST);
+                logoutEnvelope.setSessionId(sessionId);
+                logoutEnvelope.setCorrelationId("auto-logout-" + System.currentTimeMillis());
+                
+                String logoutJson = JsonUtils.toJson(logoutEnvelope);
+                coreTcpClient.sendMessageToCore(logoutJson);
+                System.out.println("   Sent automatic LOGOUT to Core for disconnected session: " + sessionId);
+            } catch (Exception e) {
+                System.err.println("   ❌ Error sending automatic LOGOUT to Core: " + e.getMessage());
+            }
+        }
+        
+        // 4. Dọn dẹp pendingRequests (như cũ)
         pendingRequests.values().removeIf(s -> Objects.equals(s.getId(), session.getId()));
-        activeClientSessions.values().removeIf(s -> Objects.equals(s.getId(), session.getId()));
     }
 }

@@ -7,11 +7,7 @@ import org.mindrot.jbcrypt.BCrypt;
 
 import java.sql.*;
 
-/**
- * AuthService - Xác thực người dùng và quản lý tài khoản với MySQL.
- *
- * @version 1.1.0 (Using BCrypt for hashing)
- */
+
 public class AuthService {
 
     private final DatabaseManager dbManager;
@@ -20,11 +16,7 @@ public class AuthService {
         this.dbManager = dbManager;
     }
 
-    /**
-     * Đăng ký người dùng mới.
-     * @throws IllegalArgumentException Nếu username/email đã tồn tại hoặc input không hợp lệ.
-     * @throws SQLException           Nếu có lỗi database.
-     */
+
     public RegisterResponseDto register(String username, String email, String password, String displayName)
             throws SQLException, IllegalArgumentException {
 
@@ -38,16 +30,17 @@ public class AuthService {
             throw new IllegalArgumentException("Password must be at least 6 characters.");
         }
 
-        // 2. Kiểm tra username/email tồn tại
         checkUserExists(username, email); // Sẽ ném Exception nếu tồn tại
 
-        // 3. Hash mật khẩu
         String passwordHash = BCrypt.hashpw(password, BCrypt.gensalt());
 
         String finalDisplayName = (displayName != null && !displayName.trim().isEmpty()) ? displayName.trim() : username;
 
         String sql = "INSERT INTO users (username, email, password_hash, created_at) VALUES (?, ?, ?, NOW())";
 
+
+        // Khi tạo PreparedStatement, bật chế độ yêu cầu trả về khóa sinh tự động bằng cách
+        // truyền thêm tham số Statement.RETURN_GENERATED_KEYS
         try (Connection conn = dbManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
@@ -65,7 +58,7 @@ public class AuthService {
                     int userIdInt = generatedKeys.getInt(1);
                     String userId = String.valueOf(userIdInt);
 
-                    // 7. Cập nhật display_name vào user_profiles (do trigger tạo)
+                    // Cập nhật display_name vào user_profiles (do trigger tạo)
                     updateDisplayName(conn, userIdInt, finalDisplayName);
 
                     RegisterResponseDto response = new RegisterResponseDto();
@@ -75,25 +68,21 @@ public class AuthService {
                     response.setDisplayName(finalDisplayName);
                     response.setTimestamp(System.currentTimeMillis());
 
-                    System.out.println("✅ User registered: " + username + " (ID: " + userId + ")");
+                    System.out.println(" User registered: " + username + " (ID: " + userId + ")");
                     return response;
                 } else {
                     throw new SQLException("Creating user failed, no ID obtained.");
                 }
             }
         } catch (SQLIntegrityConstraintViolationException e) {
-            System.err.println("Race condition during registration: " + e.getMessage());
             if (e.getMessage().contains("username")) throw new IllegalArgumentException("Username already exists.");
             if (e.getMessage().contains("email")) throw new IllegalArgumentException("Email already registered.");
             throw new IllegalArgumentException("User already exists.");
         }
     }
 
-    /**
-     * Đăng nhập người dùng.
-     * @throws IllegalArgumentException Nếu sai thông tin đăng nhập, tài khoản không hoạt động.
-     * @throws SQLException           Nếu có lỗi database.
-     */
+
+
     public LoginSuccessDto login(String username, String password) throws SQLException, IllegalArgumentException {
         if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
             throw new IllegalArgumentException("Username and password cannot be empty.");
@@ -143,7 +132,6 @@ public class AuthService {
                         response.setGamesWon(gamesWon != null ? gamesWon : 0);
                         response.setTimestamp(System.currentTimeMillis());
 
-                        System.out.println("✅ User logged in: " + username + " (ID: " + userId + ", Games: " + gamesPlayed + ", Wins: " + gamesWon + ")");
                         return response;
                     } else {
                         throw new IllegalArgumentException("Invalid username or password.");
@@ -191,7 +179,7 @@ public class AuthService {
                 stmt.setInt(1, userId);
                 stmt.executeUpdate();
             } catch (SQLException e) {
-                System.err.println("⚠️ Failed to update last_login for user " + userId + ": " + e.getMessage());
+
             }
         }).start();
     }

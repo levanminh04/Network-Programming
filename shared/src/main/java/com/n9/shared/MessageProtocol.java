@@ -85,6 +85,11 @@ public final class MessageProtocol {
         /** Thông báo đối thủ đã thoát trận. */
         public static final String GAME_OPPONENT_LEFT      = "GAME.OPPONENT_LEFT";
 
+        /** Client gửi yêu cầu đầu hàng/thoát trận. */
+        public static final String GAME_FORFEIT_REQUEST    = "GAME.FORFEIT_REQUEST";
+        /** Server xác nhận đã xử lý forfeit. */
+        public static final String GAME_FORFEIT_SUCCESS    = "GAME.FORFEIT_SUCCESS";
+
 
         // ============================
         // SYSTEM DOMAIN
