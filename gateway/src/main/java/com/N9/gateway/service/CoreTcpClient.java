@@ -23,9 +23,7 @@ public class CoreTcpClient implements InitializingBean, DisposableBean {
 
     private static final String CORE_HOST = "localhost";
     private static final int CORE_PORT = 9090;
-    // THÊM: Hằng số cho Heartbeat
-    // NOTE: Tăng lên 60 giây để giảm nhiễu khi debug (production nên giữ 15-30s)
-    private static final int HEARTBEAT_INTERVAL_SECONDS = 300;
+    private static final int HEARTBEAT_INTERVAL_SECONDS = 5;
 
     private Socket socket;
     private DataOutputStream out;
@@ -33,9 +31,13 @@ public class CoreTcpClient implements InitializingBean, DisposableBean {
 
     private final GatewayWebSocketHandler webSocketHandler;
 
-    // THÊM: Bộ lập lịch cho Heartbeat
     private ScheduledExecutorService heartbeatScheduler;
 
+
+//    Khi nào nên dùng @Lazy:
+//    Bean nặng, khởi tạo tốn thời gian hoặc tài nguyên (ví dụ: kết nối remote API, đọc file lớn, v.v.).
+//    Bean ít khi được dùng, không cần khởi tạo sớm.
+//    Tránh vòng lặp phụ thuộc (circular dependency) trong injection.
     public CoreTcpClient(@Lazy GatewayWebSocketHandler webSocketHandler) {
         this.webSocketHandler = webSocketHandler;
     }
@@ -44,24 +46,17 @@ public class CoreTcpClient implements InitializingBean, DisposableBean {
     public void afterPropertiesSet() throws Exception {
         connect();
         startListening();
-        // THÊM: Bắt đầu gửi Heartbeat
         startHeartbeat();
     }
 
+    // kết nối tới core
     private void connect() throws IOException {
-        System.out.println("🔌 Connecting to Core Server at " + CORE_HOST + ":" + CORE_PORT + "...");
         this.socket = new Socket(CORE_HOST, CORE_PORT);
-
-        // THAY ĐỔI: Thêm Buffered streams để tăng hiệu năng (khớp với Core)
         this.out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
         this.in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
-
-        System.out.println("✅ Connected to Core Server.");
     }
 
-    /**
-     * Gửi tin nhắn (Length-Prefixed) - An toàn luồng.
-     */
+
     public synchronized void sendMessageToCore(String jsonMessage) {
         try {
             if (out != null && !socket.isClosed()) {
@@ -73,14 +68,11 @@ public class CoreTcpClient implements InitializingBean, DisposableBean {
                 out.flush(); // Đẩy dữ liệu đi ngay
             }
         } catch (IOException e) {
-            System.err.println("❌ Failed to send message to Core: " + e.getMessage());
             // TODO: Triển khai logic reconnect nếu cần
         }
     }
 
-    /**
-     * Đọc tin nhắn (Length-Prefixed)
-     */
+
     private void startListening() {
         new Thread(() -> {
             try {
@@ -106,7 +98,6 @@ public class CoreTcpClient implements InitializingBean, DisposableBean {
         }, "core-tcp-listener").start();
     }
 
-    // --- THÊM CÁC HÀM HEARTBEAT ---
     private void startHeartbeat() {
         heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
         heartbeatScheduler.scheduleAtFixedRate(() -> {
@@ -119,7 +110,6 @@ public class CoreTcpClient implements InitializingBean, DisposableBean {
                     sendMessageToCore(JsonUtils.toJson(ping));
                 }
             } catch (Exception e) {
-                System.err.println("❌ Failed to send PING: " + e.getMessage());
             }
         }, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
         System.out.println("💓 Heartbeat service started. Sending PING every " + HEARTBEAT_INTERVAL_SECONDS + " seconds.");
@@ -131,7 +121,7 @@ public class CoreTcpClient implements InitializingBean, DisposableBean {
             System.out.println("💓 Heartbeat service stopped.");
         }
     }
-    // ----------------------------
+
 
     @Override
     public void destroy() throws Exception {

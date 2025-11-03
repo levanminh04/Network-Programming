@@ -25,7 +25,6 @@ public class CoreServerListener implements Runnable {
     private final ConcurrentHashMap<String, ClientConnectionHandler> activeConnections;
     private volatile boolean running = true;
 
-    // Constructor đã được cập nhật
     public CoreServerListener(
             ServerSocket serverSocket,
             ExecutorService pool,
@@ -33,7 +32,7 @@ public class CoreServerListener implements Runnable {
             AuthService authService,
             SessionManager sessionManager,
             ConcurrentHashMap<String, ClientConnectionHandler> activeConnections,
-            MatchmakingService matchmakingService // Thêm
+            MatchmakingService matchmakingService
     ) {
         this.serverSocket = serverSocket;
         this.pool = pool;
@@ -41,7 +40,7 @@ public class CoreServerListener implements Runnable {
         this.authService = authService;
         this.sessionManager = sessionManager;
         this.activeConnections = activeConnections;
-        this.matchmakingService = matchmakingService; // Thêm
+        this.matchmakingService = matchmakingService;
     }
 
     public void start() {

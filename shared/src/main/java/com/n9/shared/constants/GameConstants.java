@@ -79,7 +79,7 @@ public final class GameConstants {
      * Round timeout in seconds (player has 10 seconds to select card)
      * After timeout, server auto-picks random card
      */
-    public static final int ROUND_TIMEOUT_SECONDS = 10;
+    public static final int ROUND_TIMEOUT_SECONDS = 16;
     
     /**
      * Round timeout in milliseconds (for JavaScript/frontend)
