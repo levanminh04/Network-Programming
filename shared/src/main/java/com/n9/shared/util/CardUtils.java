@@ -89,10 +89,6 @@ public final class CardUtils {
             boolean removed = cardList.remove(cardToRemove); // Dùng remove(Object) an toàn hơn remove(index)
             if(removed) {
                 return cardToRemove;
-            } else {
-                // Lỗi không mong muốn nếu tìm thấy nhưng không xóa được
-                System.err.println("Inconsistency: Found card " + cardId + " but failed to remove it.");
-                return null;
             }
         }
         return null;

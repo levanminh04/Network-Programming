@@ -219,7 +219,7 @@ public class GameService {
             game.setPlayer2PlayedCard(null);
             game.setPlayer1AutoPicked(false);
             game.setPlayer2AutoPicked(false);
-            System.out.println("⏱️ Starting Round " + nextRound + " for Match " + matchId);
+
             long timeoutMillis = GameConstants.ROUND_TIMEOUT_SECONDS * 1000L;
             long deadlineTimestamp = System.currentTimeMillis() + timeoutMillis;
             Map<String, Object> payload = new HashMap<>();
@@ -309,13 +309,18 @@ public class GameService {
                 throw new IllegalArgumentException("Game not found or ended: " + matchId);
             if (game.getCurrentRound() == 0 || game.getCurrentRound() > GameConstants.TOTAL_ROUNDS)
                 throw new IllegalArgumentException("Cannot play outside active rounds.");
+
             isPlayer1 = playerId.equals(game.getPlayer1Id());
+
             if ((isPlayer1 && game.getPlayer1PlayedCard() != null) || (!isPlayer1 && game.getPlayer2PlayedCard() != null))
                 throw new IllegalArgumentException("Already played this round.");
-            playedCard = CardUtils.findAndRemoveCard(game.getAvailableCards(), cardId);
+
+            playedCard = CardUtils.findAndRemoveCard(game.getAvailableCards(), cardId);  // lấy ra và xóa ngay lá mà  người chơi pick
+            // sau bươc này game.getAvailableCards() bị -1
+
             if (playedCard == null)
                 throw new IllegalArgumentException("Card " + cardId + " is not available or already played.");
-            System.out.println("🃏 Player " + playerId + " played: " + formatCard(playedCard));
+
             if (isPlayer1) {
                 game.setPlayer1PlayedCard(playedCard);
                 game.setPlayer1AutoPicked(false);
@@ -323,18 +328,24 @@ public class GameService {
                 game.setPlayer2PlayedCard(playedCard);
                 game.setPlayer2AutoPicked(false);
             }
-            currentAvailableCards = new ArrayList<>(game.getAvailableCards());
+            currentAvailableCards = new ArrayList<>(game.getAvailableCards()); // -1 card
             CardDto opponentCard = isPlayer1 ? game.getPlayer2PlayedCard() : game.getPlayer1PlayedCard();
-            if (opponentCard != null) triggerReveal = true;
+
+            if (opponentCard != null) {
+                triggerReveal = true;
+            }
         } finally {
             lock.unlock();
         }
+
         PlayCardAckDto ackDto = new PlayCardAckDto();
         ackDto.setGameId(matchId);
         ackDto.setCardId(playedCard.getCardId());
-        if (currentAvailableCards != null) ackDto.setAvailableCards(currentAvailableCards);
+        ackDto.setAvailableCards(currentAvailableCards);
+
+
         notifyPlayer(playerId, MessageProtocol.Type.GAME_CARD_PLAY_SUCCESS, ackDto);
-        if (triggerReveal) {
+        if (triggerReveal) { // thằng pick cuối thì thằng đấy kích hoạt  executeRoundRevealAndProceed
             executeRoundRevealAndProceed(matchId);
         } else {
             GameState game = activeGames.get(matchId);
@@ -350,9 +361,7 @@ public class GameService {
         return playedCard;
     }
 
-    /**
-     * Thực thi lật bài, tính điểm, chuyển round hoặc kết thúc game.
-     */
+    /**Thực thi lật bài, tính điểm, chuyển round hoặc kết thúc game.*/
     private void executeRoundRevealAndProceed(String matchId) {
         Lock lock = gameLocks.get(matchId);
         if (lock == null) return;
@@ -379,7 +388,6 @@ public class GameService {
             try {
                 persistRoundResult(game, p1Card, p2Card, p1RoundScore, p2RoundScore);
             } catch (SQLException e) {
-                System.err.println("❌ CRITICAL ERROR: Failed to persist round result: " + e.getMessage());
             }
             revealPayloadP1 = RoundRevealDto.builder().gameId(matchId).roundNumber(game.getCurrentRound()).playerCard(p1Card).opponentCard(p2Card).playerAutoPicked(p1Auto).opponentAutoPicked(p2Auto).pointsEarned(p1RoundScore).playerScore(game.getPlayer1Score()).opponentScore(game.getPlayer2Score()).result(p1RoundScore > p2RoundScore ? "WIN" : (p2RoundScore > p1RoundScore ? "LOSS" : "DRAW")).build();
             game.addRoundResult(revealPayloadP1);
@@ -389,7 +397,6 @@ public class GameService {
                 game.setComplete(true);
                 gameOver = true;
                 gameSnapshotForEnd = cloneGameState(game);
-                System.out.println("🏁 Game " + matchId + " completed...");
             }
         } finally {
             lock.unlock();
@@ -406,9 +413,7 @@ public class GameService {
         }
     }
 
-    /**
-     * Tạo payload reveal cho Player 2.
-     */
+    /* Tạo payload reveal cho Player 2. */
     private RoundRevealDto createRevealForPlayer2(RoundRevealDto p1Reveal, int finalP1Score, int finalP2Score, int p2PointsEarned) {
         if (p1Reveal == null) return null;
         String p2Result = p1Reveal.getResult().equals("WIN") ? "LOSS" : (p1Reveal.getResult().equals("LOSS") ? "WIN" : "DRAW");
@@ -421,9 +426,7 @@ public class GameService {
                 .result(p2Result).build();
     }
 
-    /**
-     * Sao chép GameState để xử lý bất đồng bộ.
-     */
+    /* Sao chép GameState để xử lý bất đồng bộ. */
     private GameState cloneGameState(GameState original) {
         if (original == null) return null;
         GameState copy = new GameState(original.getMatchId(), original.getPlayer1Id(), original.getPlayer2Id());
@@ -433,9 +436,7 @@ public class GameService {
         return copy;
     }
 
-    /**
-     * Xử lý kết thúc game (đã cập nhật logic DB).
-     */
+    /* Xử lý kết thúc game (đã cập nhật logic DB). */
     private void handleGameEnd(GameState completedGame) {
         System.out.println("Handling game end for match " + completedGame.getMatchId());
         String winnerId = getGameWinner(completedGame.getMatchId());
@@ -469,9 +470,7 @@ public class GameService {
     }
 
 
-    /**
-     * Xử lý khi một người chơi bỏ cuộc (mất kết nối).
-     */
+    /* Xử lý khi một người chơi bỏ cuộc (mất kết nối). */
     public void handleForfeit(String matchId, String forfeitingPlayerId) {
         Lock lock = gameLocks.get(matchId);
         if (lock == null) return;
@@ -498,7 +497,7 @@ public class GameService {
                 }
                 System.out.println("   Persisted forfeit game result to DB for match: " + matchId);
             } catch (SQLException e) {
-                System.err.println("❌ CRITICAL ERROR: Failed to persist forfeit result: " + e.getMessage());
+
             }
             gameSnapshotForEnd = cloneGameState(game);
         } finally {
@@ -517,9 +516,7 @@ public class GameService {
         cleanupGame(matchId);
     }
 
-    /**
-     * Gửi thông báo cho người chơi.
-     */
+    /* Gửi thông báo cho người chơi. */
     private void notifyPlayer(String userId, String messageType, Object payload) {
         ClientConnectionHandler handler = activeConnections.get(userId);
         if (handler != null) {
@@ -536,18 +533,14 @@ public class GameService {
         }
     }
 
-    /**
-     * Dọn dẹp game khỏi bộ nhớ.
-     */
+    /* Dọn dẹp game khỏi bộ nhớ. */
     public void cleanupGame(String matchId) {
         activeGames.remove(matchId);
         gameLocks.remove(matchId);
         System.out.println("🧹 Cleaned up game state for match " + matchId);
     }
 
-    /**
-     * Lưu game mới vào DB.
-     */
+    /*  Lưu game mới vào DB. */
     private void persistNewGame(GameState game) throws SQLException {
         String sql = "INSERT INTO games (match_id, player1_id, player2_id, game_mode, total_rounds, status, started_at) " +
                 "VALUES (?, ?, ?, 'QUICK', ?, 'IN_PROGRESS', NOW())";
@@ -561,9 +554,7 @@ public class GameService {
         }
     }
 
-    /**
-     * Lưu kết quả round vào DB.
-     */
+    /* Lưu kết quả round vào DB. */
     private void persistRoundResult(GameState game, CardDto p1Card, CardDto p2Card, int p1RoundScore, int p2RoundScore) throws SQLException {
         String sql = "INSERT INTO game_rounds (match_id, round_number, " +
                 "player1_card_id, player1_card_value, player1_is_auto_picked, " +
