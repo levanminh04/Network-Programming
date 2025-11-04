@@ -51,6 +51,21 @@ public final class MessageProtocol {
         public static final String LOBBY_MATCH_REQUEST_ACK = "LOBBY.MATCH_REQUEST_ACK";
         public static final String LOBBY_MATCH_CANCEL    = "LOBBY.MATCH_CANCEL";
 
+        // Leaderboard (Bảng Xếp Hạng)
+        /** Client yêu cầu lấy danh sách top players. */
+        public static final String LOBBY_GET_LEADERBOARD_REQUEST = "LOBBY.GET_LEADERBOARD_REQUEST";
+        /** Server trả về danh sách leaderboard. */
+        public static final String LOBBY_GET_LEADERBOARD_SUCCESS = "LOBBY.GET_LEADERBOARD_SUCCESS";
+        /** Server báo lỗi khi lấy leaderboard. */
+        public static final String LOBBY_GET_LEADERBOARD_FAILURE = "LOBBY.GET_LEADERBOARD_FAILURE";
+
+        /** Client yêu cầu lấy rank của bản thân. */
+        public static final String LOBBY_GET_USER_RANK_REQUEST   = "LOBBY.GET_USER_RANK_REQUEST";
+        /** Server trả về thông tin rank của user. */
+        public static final String LOBBY_GET_USER_RANK_SUCCESS   = "LOBBY.GET_USER_RANK_SUCCESS";
+        /** Server báo lỗi khi lấy rank. */
+        public static final String LOBBY_GET_USER_RANK_FAILURE   = "LOBBY.GET_USER_RANK_FAILURE";
+
 
         // ============================
         // GAME DOMAIN

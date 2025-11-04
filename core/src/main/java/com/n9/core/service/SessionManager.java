@@ -159,5 +159,27 @@ public class SessionManager {
             stmt.executeUpdate();
         }
     }
+
+    /**
+     * Kiểm tra user có đang online hay không.
+     * 
+     * @param userId ID của user cần kiểm tra
+     * @return true nếu user đang có session active, false nếu không
+     */
+    public boolean isUserOnline(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            return false;
+        }
+        return userSessionMap.containsKey(userId);
+    }
+
+    /**
+     * Lấy số lượng users đang online.
+     * 
+     * @return Số lượng users có session active
+     */
+    public int getOnlineUserCount() {
+        return userSessionMap.size();
+    }
 }
 

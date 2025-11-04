@@ -3,6 +3,7 @@ package com.n9.core.network;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.n9.core.service.AuthService;
 import com.n9.core.service.GameService;
+import com.n9.core.service.LeaderboardService;
 import com.n9.core.service.MatchmakingService;
 import com.n9.core.service.SessionManager;
 import com.n9.shared.MessageProtocol;
@@ -41,6 +42,7 @@ public class ClientConnectionHandler implements Runnable {
     private final AuthService authService;
     private final SessionManager sessionManager;
     private final MatchmakingService matchmakingService;
+    private final LeaderboardService leaderboardService;
     private final ExecutorService pool;
     private final ConcurrentHashMap<String, ClientConnectionHandler> activeConnections;
 
@@ -53,6 +55,7 @@ public class ClientConnectionHandler implements Runnable {
             AuthService authService,
             SessionManager sessionManager,
             MatchmakingService matchmakingService,
+            LeaderboardService leaderboardService,
             ExecutorService pool,
             ConcurrentHashMap<String, ClientConnectionHandler> activeConnections
     ) {
@@ -61,6 +64,7 @@ public class ClientConnectionHandler implements Runnable {
         this.authService = authService;
         this.sessionManager = sessionManager;
         this.matchmakingService = matchmakingService;
+        this.leaderboardService = leaderboardService;
         this.pool = pool;
         this.activeConnections = activeConnections;
     }
@@ -148,6 +152,14 @@ public class ClientConnectionHandler implements Runnable {
                     response = handleMatchRequest(envelope);
                     break;
                 // TODO: Thêm case LOBBY_MATCH_CANCEL
+
+                // Leaderboard
+                case MessageProtocol.Type.LOBBY_GET_LEADERBOARD_REQUEST:
+                    response = handleGetLeaderboard(envelope);
+                    break;
+                case MessageProtocol.Type.LOBBY_GET_USER_RANK_REQUEST:
+                    response = handleGetUserRank(envelope);
+                    break;
 
                 // --- GAME ---
                 case MessageProtocol.Type.GAME_CARD_PLAY_REQUEST:
@@ -261,6 +273,95 @@ public class ClientConnectionHandler implements Runnable {
             failurePayload.put("message", "Invalid card selection. Please choose another card.");
             
             return MessageFactory.createResponse(envelope, MessageProtocol.Type.GAME_CARD_PLAY_FAILURE, failurePayload);
+        }
+    }
+
+    /**
+     * Xử lý yêu cầu lấy danh sách leaderboard.
+     * Payload mong đợi: { "limit": 100, "offset": 0 }
+     */
+    private MessageEnvelope handleGetLeaderboard(MessageEnvelope envelope) {
+        try {
+            // Parse payload
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = (Map<String, Object>) envelope.getPayload();
+            
+            int limit = payload != null && payload.containsKey("limit") 
+                ? ((Number) payload.get("limit")).intValue() 
+                : 100;
+            int offset = payload != null && payload.containsKey("offset") 
+                ? ((Number) payload.get("offset")).intValue() 
+                : 0;
+
+            // Gọi service
+            var leaderboard = leaderboardService.getTopPlayers(limit, offset);
+            int totalPlayers = leaderboardService.getTotalPlayersCount();
+
+            // Tạo response payload
+            Map<String, Object> responsePayload = new HashMap<>();
+            responsePayload.put("leaderboard", leaderboard);
+            responsePayload.put("totalPlayers", totalPlayers);
+            responsePayload.put("limit", limit);
+            responsePayload.put("offset", offset);
+
+            return MessageFactory.createResponse(envelope, 
+                MessageProtocol.Type.LOBBY_GET_LEADERBOARD_SUCCESS, 
+                responsePayload);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return MessageFactory.createErrorResponse(envelope, 
+                "LEADERBOARD_ERROR", 
+                "Failed to fetch leaderboard: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Xử lý yêu cầu lấy rank của user hiện tại.
+     * Không cần payload (lấy từ sessionId).
+     */
+    private MessageEnvelope handleGetUserRank(MessageEnvelope envelope) {
+        try {
+            // Lấy userId từ session
+            String sessionId = envelope.getSessionId();
+            if (sessionId == null) {
+                return MessageFactory.createErrorResponse(envelope, 
+                    "UNAUTHORIZED", 
+                    "Session required to get user rank");
+            }
+
+            SessionManager.SessionContext session = sessionManager.getSession(sessionId);
+            if (session == null) {
+                return MessageFactory.createErrorResponse(envelope, 
+                    "INVALID_SESSION", 
+                    "Session not found or expired");
+            }
+
+            int userId = Integer.parseInt(session.getUserId());
+            
+            // Gọi service
+            var userRankInfo = leaderboardService.getUserRank(userId);
+
+            if (userRankInfo == null) {
+                // User chưa chơi trận nào
+                Map<String, Object> emptyPayload = new HashMap<>();
+                emptyPayload.put("rank", null);
+                emptyPayload.put("message", "You haven't played any games yet");
+                
+                return MessageFactory.createResponse(envelope, 
+                    MessageProtocol.Type.LOBBY_GET_USER_RANK_SUCCESS, 
+                    emptyPayload);
+            }
+
+            return MessageFactory.createResponse(envelope, 
+                MessageProtocol.Type.LOBBY_GET_USER_RANK_SUCCESS, 
+                userRankInfo);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return MessageFactory.createErrorResponse(envelope, 
+                "USER_RANK_ERROR", 
+                "Failed to fetch user rank: " + e.getMessage());
         }
     }
 

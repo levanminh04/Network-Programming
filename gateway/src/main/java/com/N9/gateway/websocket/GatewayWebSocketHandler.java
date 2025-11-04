@@ -106,10 +106,12 @@ public class GatewayWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+
+
+//    Phát hiện khi WebSocket đóng (user đóng tab, mất mạng, crash browser)
+//    Gửi thông báo AUTH.LOGOUT_REQUEST đến Core để dọn dẹp
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        System.out.println("Frontend disconnected: " + session.getId() + " with status: " + status);
-
 
         // 1. Tìm sessionId của kết nối vừa đóng
         String sessionId = sessionWsMap.remove(session.getId());

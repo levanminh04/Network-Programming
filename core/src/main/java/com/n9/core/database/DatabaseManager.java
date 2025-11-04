@@ -6,15 +6,8 @@ import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 
-/**
- * DatabaseManager - Quản lý HikariCP Connection Pool
- * 
- * Singleton pattern để đảm bảo chỉ có 1 pool duy nhất trong toàn bộ ứng dụng.
- * HikariCP tự động quản lý connection reuse, health check, và leak detection.
- * 
- * @author MVP Team
- * @version 1.0
- */
+
+
 public class DatabaseManager {
     private static DatabaseManager instance;
     private HikariDataSource dataSource;
