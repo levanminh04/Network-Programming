@@ -5,6 +5,7 @@ import com.n9.core.network.ClientConnectionHandler;
 import com.n9.core.network.CoreServerListener;
 import com.n9.core.service.AuthService;
 import com.n9.core.service.GameService;
+import com.n9.core.service.LeaderboardService;
 import com.n9.core.service.MatchmakingService;
 import com.n9.core.service.SessionManager;
 import java.net.ServerSocket;
@@ -34,6 +35,7 @@ public final class CoreServer {
         var gameService = new GameService(dbManager, activeConnections, scheduler, sessionManager);
 
         var authService = new AuthService(dbManager);
+        var leaderboardService = new LeaderboardService(dbManager, sessionManager);
         var matchmakingService = new MatchmakingService(gameService, sessionManager, activeConnections, scheduler);
 
         var listener = new CoreServerListener(
@@ -43,7 +45,8 @@ public final class CoreServer {
                 authService,
                 sessionManager,
                 activeConnections,
-                matchmakingService
+                matchmakingService,
+                leaderboardService
         );
         listener.start();
         matchmakingService.startMatchmakingLoop();

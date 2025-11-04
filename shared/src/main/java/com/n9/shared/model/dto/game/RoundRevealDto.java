@@ -5,97 +5,47 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.Objects;
 
-/**
- * Round Reveal DTO
- * 
- * Reveals both players' cards and round result.
- * Sent when both players have selected (or timeout).
- * 
- * Message Type: GAME.ROUND_REVEAL
- * 
- * @author N9 Team
- * @version 1.0.0
- * @since 2025-01-05
- */
+
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RoundRevealDto {
     
-    /**
-     * Game ID
-     */
+
     @JsonProperty("gameId")
     private String gameId;
-    
-    /**
-     * Round number (1-3)
-     */
+
     @JsonProperty("roundNumber")
     private Integer roundNumber;
-    
-    /**
-     * Player's selected card
-     */
+
     @JsonProperty("playerCard")
     private CardDto playerCard;
-    
-    /**
-     * Opponent's selected card
-     */
+
     @JsonProperty("opponentCard")
     private CardDto opponentCard;
-    
-    /**
-     * Round result for player (WIN, LOSS, DRAW)
-     */
+
     @JsonProperty("result")
     private String result;
-    
-    /**
-     * Points earned this round
-     */
+
     @JsonProperty("pointsEarned")
     private Integer pointsEarned;
-    
-    /**
-     * Player's total score after this round
-     */
+
     @JsonProperty("playerScore")
     private Integer playerScore;
-    
-    /**
-     * Opponent's total score after this round
-     */
+
     @JsonProperty("opponentScore")
     private Integer opponentScore;
-    
-    /**
-     * Whether player card was auto-picked due to timeout
-     */
+
     @JsonProperty("playerAutoPicked")
     private Boolean playerAutoPicked;
-    
-    /**
-     * Whether opponent card was auto-picked due to timeout
-     */
+
     @JsonProperty("opponentAutoPicked")
     private Boolean opponentAutoPicked;
-    
-    /**
-     * Reveal timestamp (epoch milliseconds)
-     */
+
     @JsonProperty("timestamp")
     private Long timestamp;
-    
-    /**
-     * Message for player
-     */
+
     @JsonProperty("message")
     private String message;
-    
-    // ============================================================================
-    // CONSTRUCTORS
-    // ============================================================================
-    
+
     public RoundRevealDto() {
         this.timestamp = System.currentTimeMillis();
         this.playerAutoPicked = false;
@@ -111,11 +61,7 @@ public class RoundRevealDto {
         this.result = result;
         this.message = generateMessage(result);
     }
-    
-    // ============================================================================
-    // BUILDER PATTERN
-    // ============================================================================
-    
+
     public static Builder builder() {
         return new Builder();
     }
@@ -333,10 +279,7 @@ public class RoundRevealDto {
         }
     }
     
-    // ============================================================================
-    // OBJECT METHODS
-    // ============================================================================
-    
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

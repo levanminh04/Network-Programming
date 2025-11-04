@@ -2,6 +2,7 @@ package com.n9.core.network;
 
 import com.n9.core.service.AuthService;
 import com.n9.core.service.GameService;
+import com.n9.core.service.LeaderboardService;
 import com.n9.core.service.MatchmakingService; // Thêm import
 import com.n9.core.service.SessionManager;
 import java.io.IOException;
@@ -22,6 +23,7 @@ public class CoreServerListener implements Runnable {
     private final AuthService authService;
     private final SessionManager sessionManager;
     private final MatchmakingService matchmakingService; // Thêm
+    private final LeaderboardService leaderboardService;
     private final ConcurrentHashMap<String, ClientConnectionHandler> activeConnections;
     private volatile boolean running = true;
 
@@ -32,7 +34,8 @@ public class CoreServerListener implements Runnable {
             AuthService authService,
             SessionManager sessionManager,
             ConcurrentHashMap<String, ClientConnectionHandler> activeConnections,
-            MatchmakingService matchmakingService
+            MatchmakingService matchmakingService,
+            LeaderboardService leaderboardService
     ) {
         this.serverSocket = serverSocket;
         this.pool = pool;
@@ -41,6 +44,7 @@ public class CoreServerListener implements Runnable {
         this.sessionManager = sessionManager;
         this.activeConnections = activeConnections;
         this.matchmakingService = matchmakingService;
+        this.leaderboardService = leaderboardService;
     }
 
     public void start() {
@@ -63,6 +67,7 @@ public class CoreServerListener implements Runnable {
                         authService,
                         sessionManager,
                         matchmakingService,
+                        leaderboardService,
                         pool,
                         activeConnections
                 );

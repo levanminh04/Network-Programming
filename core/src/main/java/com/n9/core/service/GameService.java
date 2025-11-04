@@ -247,7 +247,11 @@ public class GameService {
         lock.lock();
         try {
             GameState game = activeGames.get(matchId);
-            if (game == null || game.isComplete() || game.getCurrentRound() != roundNumber) return;
+
+            if (game == null || game.isComplete() || game.getCurrentRound() != roundNumber) {
+                return;
+            }
+
             CardDto p1Card = game.getPlayer1PlayedCard();
             CardDto p2Card = game.getPlayer2PlayedCard();
             CardDto pickedCard;
@@ -369,7 +373,7 @@ public class GameService {
         boolean gameOver = false;
         GameState gameSnapshotForEnd = null;
         String player1Id = null, player2Id = null;
-        List<CardDto> finalAvailableCards = null;
+
         lock.lock();
         try {
             GameState game = activeGames.get(matchId);
@@ -389,10 +393,36 @@ public class GameService {
                 persistRoundResult(game, p1Card, p2Card, p1RoundScore, p2RoundScore);
             } catch (SQLException e) {
             }
-            revealPayloadP1 = RoundRevealDto.builder().gameId(matchId).roundNumber(game.getCurrentRound()).playerCard(p1Card).opponentCard(p2Card).playerAutoPicked(p1Auto).opponentAutoPicked(p2Auto).pointsEarned(p1RoundScore).playerScore(game.getPlayer1Score()).opponentScore(game.getPlayer2Score()).result(p1RoundScore > p2RoundScore ? "WIN" : (p2RoundScore > p1RoundScore ? "LOSS" : "DRAW")).build();
+            revealPayloadP1 = RoundRevealDto.builder().
+                    gameId(matchId).
+                    roundNumber(game.getCurrentRound())
+                    .playerCard(p1Card)
+                    .opponentCard(p2Card)
+                    .playerAutoPicked(p1Auto)
+                    .opponentAutoPicked(p2Auto)
+                    .pointsEarned(p1RoundScore)
+                    .playerScore(game.getPlayer1Score())
+                    .opponentScore(game.getPlayer2Score())
+                    .result(p1RoundScore > p2RoundScore ? "WIN" :
+                            (p2RoundScore > p1RoundScore ? "LOSS" : "DRAW"))
+                    .build();
+
             game.addRoundResult(revealPayloadP1);
-            revealPayloadP2 = createRevealForPlayer2(revealPayloadP1, game.getPlayer1Score(), game.getPlayer2Score(), p2RoundScore);
-            finalAvailableCards = new ArrayList<>(game.getAvailableCards());
+
+            revealPayloadP2 = RoundRevealDto.builder()
+                    .gameId(matchId)
+                    .roundNumber(game.getCurrentRound())
+                    .playerCard(p2Card)          // Player 2 nhìn thấy bài của mình
+                    .opponentCard(p1Card)        // và bài của đối thủ
+                    .playerAutoPicked(p2Auto)
+                    .opponentAutoPicked(p1Auto)
+                    .pointsEarned(p2RoundScore)
+                    .playerScore(game.getPlayer2Score())
+                    .opponentScore(game.getPlayer1Score())
+                    .result(p2RoundScore > p1RoundScore ? "WIN" :
+                            (p1RoundScore > p2RoundScore ? "LOSS" : "DRAW"))
+                    .build();
+
             if (game.getCurrentRound() >= GameConstants.TOTAL_ROUNDS) {
                 game.setComplete(true);
                 gameOver = true;
@@ -413,18 +443,7 @@ public class GameService {
         }
     }
 
-    /* Tạo payload reveal cho Player 2. */
-    private RoundRevealDto createRevealForPlayer2(RoundRevealDto p1Reveal, int finalP1Score, int finalP2Score, int p2PointsEarned) {
-        if (p1Reveal == null) return null;
-        String p2Result = p1Reveal.getResult().equals("WIN") ? "LOSS" : (p1Reveal.getResult().equals("LOSS") ? "WIN" : "DRAW");
-        return RoundRevealDto.builder()
-                .gameId(p1Reveal.getGameId()).roundNumber(p1Reveal.getRoundNumber())
-                .playerCard(p1Reveal.getOpponentCard()).opponentCard(p1Reveal.getPlayerCard())
-                .playerAutoPicked(p1Reveal.getOpponentAutoPicked())
-                .opponentAutoPicked(p1Reveal.getPlayerAutoPicked())
-                .pointsEarned(p2PointsEarned).playerScore(finalP2Score).opponentScore(finalP1Score)
-                .result(p2Result).build();
-    }
+
 
     /* Sao chép GameState để xử lý bất đồng bộ. */
     private GameState cloneGameState(GameState original) {
@@ -511,6 +530,7 @@ public class GameService {
             gameEndPayload.put("forfeited", true);
             gameEndPayload.put("player1Score", gameSnapshotForEnd.getPlayer1Score());
             gameEndPayload.put("player2Score", gameSnapshotForEnd.getPlayer2Score());
+            // CHỈ GỬI ĐẾN NGƯỜI THẮNG winningPlayerId (vì người kia đã disconnect)
             notifyPlayer(winningPlayerId, MessageProtocol.Type.GAME_END, gameEndPayload);
         }
         cleanupGame(matchId);

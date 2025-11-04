@@ -17,6 +17,12 @@ const MessageType = {
   LOBBY_MATCH_REQUEST: 'LOBBY.MATCH_REQUEST',
   LOBBY_MATCH_REQUEST_ACK: 'LOBBY.MATCH_REQUEST_ACK',
   LOBBY_MATCH_CANCEL: 'LOBBY.MATCH_CANCEL',
+  LOBBY_GET_LEADERBOARD_REQUEST: 'LOBBY.GET_LEADERBOARD_REQUEST',
+  LOBBY_GET_LEADERBOARD_SUCCESS: 'LOBBY.GET_LEADERBOARD_SUCCESS',
+  LOBBY_GET_LEADERBOARD_FAILURE: 'LOBBY.GET_LEADERBOARD_FAILURE',
+  LOBBY_GET_USER_RANK_REQUEST: 'LOBBY.GET_USER_RANK_REQUEST',
+  LOBBY_GET_USER_RANK_SUCCESS: 'LOBBY.GET_USER_RANK_SUCCESS',
+  LOBBY_GET_USER_RANK_FAILURE: 'LOBBY.GET_USER_RANK_FAILURE',
   
   // GAME DOMAIN
   GAME_MATCH_FOUND: 'GAME.MATCH_FOUND',
@@ -125,6 +131,12 @@ const initialState = {
   // Lobby State
   matchmaking: false,
   matchFound: false,
+  
+  // Leaderboard State
+  leaderboard: [],
+  userRank: null,
+  totalPlayers: 0,
+  leaderboardLoading: false,
   
   // Game State
   gameId: null,
@@ -343,6 +355,31 @@ const appReducer = (state, action) => {
         error: null
       };
     
+    // Leaderboard Actions
+    case 'LEADERBOARD_LOADING':
+      return { ...state, leaderboardLoading: true };
+    case 'LEADERBOARD_SUCCESS':
+      return {
+        ...state,
+        leaderboard: action.payload.leaderboard || [],
+        totalPlayers: action.payload.totalPlayers || 0,
+        leaderboardLoading: false,
+        error: null
+      };
+    case 'USER_RANK_SUCCESS':
+      console.log('✅ USER_RANK_SUCCESS reducer - payload:', action.payload);
+      return {
+        ...state,
+        userRank: action.payload,
+        error: null
+      };
+    case 'LEADERBOARD_ERROR':
+      return {
+        ...state,
+        leaderboardLoading: false,
+        error: action.payload
+      };
+    
     // UI Actions
     case 'SET_ERROR':
       return { ...state, error: action.payload };
@@ -515,6 +552,36 @@ const useWebSocket = (dispatch, sessionId) => {
               setTimeout(() => {
                 dispatch({ type: 'RETURN_TO_LOBBY' });
               }, 3000);
+              break;
+            
+            case MessageType.LOBBY_GET_LEADERBOARD_SUCCESS:
+              console.log('📊 Received LOBBY.GET_LEADERBOARD_SUCCESS:', envelope.payload);
+              dispatch({
+                type: 'LEADERBOARD_SUCCESS',
+                payload: envelope.payload
+              });
+              break;
+            
+            case MessageType.LOBBY_GET_LEADERBOARD_FAILURE:
+              dispatch({
+                type: 'LEADERBOARD_ERROR',
+                payload: envelope.error?.message || 'Không thể tải bảng xếp hạng'
+              });
+              break;
+            
+            case MessageType.LOBBY_GET_USER_RANK_SUCCESS:
+              console.log('🏆 Received LOBBY.GET_USER_RANK_SUCCESS:', envelope.payload);
+              dispatch({
+                type: 'USER_RANK_SUCCESS',
+                payload: envelope.payload
+              });
+              break;
+            
+            case MessageType.LOBBY_GET_USER_RANK_FAILURE:
+              dispatch({
+                type: 'LEADERBOARD_ERROR',
+                payload: envelope.error?.message || 'Không thể tải thứ hạng'
+              });
               break;
             
             case MessageType.SYSTEM_ERROR:
@@ -812,6 +879,23 @@ const AuthView = () => {
 // ============================================================================
 const LobbyView = () => {
   const { state, dispatch, sendMessage } = useApp();
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+
+  // Helper function để format "Last seen"
+  const formatLastSeen = (timestamp) => {
+    if (!timestamp) return '';
+    
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) return `${days} ngày trước`;
+    if (hours > 0) return `${hours} giờ trước`;
+    if (minutes > 0) return `${minutes} phút trước`;
+    return 'Vừa xong';
+  };
 
   const handleFindMatch = () => {
     const payload = {
@@ -831,6 +915,19 @@ const LobbyView = () => {
   const handleLogout = () => {
     sendMessage(MessageType.AUTH_LOGOUT_REQUEST, {});
     dispatch({ type: 'LOGOUT' });
+  };
+
+  const handleOpenLeaderboard = () => {
+    setShowLeaderboard(true);
+    // Fetch leaderboard data
+    dispatch({ type: 'LEADERBOARD_LOADING' });
+    console.log('📨 Requesting leaderboard (limit=20) and user rank...');
+    sendMessage(MessageType.LOBBY_GET_LEADERBOARD_REQUEST, { limit: 20, offset: 0 });
+    sendMessage(MessageType.LOBBY_GET_USER_RANK_REQUEST, {});
+  };
+
+  const handleCloseLeaderboard = () => {
+    setShowLeaderboard(false);
   };
 
   return (
@@ -894,13 +991,22 @@ const LobbyView = () => {
         <div className="text-center">
           {!state.matchmaking && !state.matchFound && (
             <>
-              <button
-                onClick={handleFindMatch}
-                disabled={!state.connected}
-                className="px-8 py-4 bg-gradient-to-r from-green-500 to-blue-500 text-white text-xl font-bold rounded-lg hover:from-green-600 hover:to-blue-600 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-              >
-                🎯 Tìm trận
-              </button>
+              <div className="space-y-4">
+                <button
+                  onClick={handleFindMatch}
+                  disabled={!state.connected}
+                  className="px-8 py-4 bg-gradient-to-r from-green-500 to-blue-500 text-white text-xl font-bold rounded-lg hover:from-green-600 hover:to-blue-600 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg w-full"
+                >
+                  🎯 Tìm trận
+                </button>
+                <button
+                  onClick={handleOpenLeaderboard}
+                  disabled={!state.connected}
+                  className="px-6 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-lg font-bold rounded-lg hover:from-yellow-600 hover:to-orange-600 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg w-full"
+                >
+                  🏆 Bảng xếp hạng
+                </button>
+              </div>
               <p className="mt-4 text-gray-600">
                 Nhấn để tìm đối thủ và bắt đầu trận đấu!
               </p>
@@ -944,6 +1050,145 @@ const LobbyView = () => {
             {state.connected ? 'Đã kết nối' : 'Mất kết nối'}
           </span>
         </div>
+
+        {/* Leaderboard Modal */}
+        {showLeaderboard && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+              {/* Modal Header */}
+              <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-6 flex justify-between items-center">
+                <h2 className="text-2xl font-bold">🏆 Bảng xếp hạng</h2>
+                <button
+                  onClick={handleCloseLeaderboard}
+                  className="text-white hover:text-gray-200 text-3xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* User Rank Banner */}
+              {state.userRank && state.userRank.rank && (
+                <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white p-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="text-sm opacity-90">Hạng của bạn</div>
+                      <div className="text-3xl font-bold">#{state.userRank.rank}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-semibold">{state.userRank.username}</div>
+                      <div className="text-sm opacity-90">
+                        {state.userRank.gamesWon} thắng / {state.userRank.gamesPlayed} trận
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm opacity-90">Tỷ lệ thắng</div>
+                      <div className="text-2xl font-bold">{state.userRank.winRate?.toFixed(1)}%</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {state.userRank && !state.userRank.rank && (
+                <div className="bg-yellow-100 text-yellow-800 p-4 text-center">
+                  <p className="font-medium">{state.userRank.message || 'Bạn chưa chơi trận nào. Hãy bắt đầu chơi để lên bảng xếp hạng!'}</p>
+                </div>
+              )}
+
+              {/* Leaderboard Table */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {state.leaderboardLoading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
+                  </div>
+                ) : state.leaderboard && state.leaderboard.length > 0 ? (
+                  <table className="w-full">
+                    <thead className="bg-gray-100 sticky top-0">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Hạng</th>
+                        <th className="px-2 py-3 text-center text-sm font-semibold text-gray-700">Online🟢</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Người chơi</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Trận thắng</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Trận chơi</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Tỷ lệ thắng</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Lần cuối</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {state.leaderboard.map((player, index) => {
+                        const isCurrentUser = player.userId === state.user?.userId;
+                        const rankClass = 
+                          player.rank === 1 ? 'bg-yellow-100' :
+                          player.rank === 2 ? 'bg-gray-100' :
+                          player.rank === 3 ? 'bg-orange-100' :
+                          isCurrentUser ? 'bg-blue-50' : '';
+                        
+                        return (
+                          <tr 
+                            key={player.userId} 
+                            className={`border-b hover:bg-gray-50 ${rankClass} ${isCurrentUser ? 'font-bold' : ''}`}
+                          >
+                            <td className="px-4 py-3 text-gray-800">
+                              {player.rank === 1 && '🥇'}
+                              {player.rank === 2 && '🥈'}
+                              {player.rank === 3 && '🥉'}
+                              {player.rank > 3 && `#${player.rank}`}
+                            </td>
+                            <td className="px-2 py-3 text-center">
+                              {player.online ? (
+                                <span className="text-green-500 text-2xl" title="Online">🟢</span>
+                              ) : (
+                                <span 
+                                  className="text-gray-400 text-2xl cursor-help" 
+                                  title={player.lastSeenTimestamp ? `Last seen: ${formatLastSeen(player.lastSeenTimestamp)}` : 'Offline'}
+                                >
+                                  ⚪
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-gray-800">
+                              {player.username}
+                              {isCurrentUser && <span className="ml-2 text-blue-600 text-xs">(Bạn)</span>}
+                            </td>
+                            <td className="px-4 py-3 text-center text-green-600 font-semibold">
+                              {player.gamesWon}
+                            </td>
+                            <td className="px-4 py-3 text-center text-gray-600">
+                              {player.gamesPlayed}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`font-semibold ${
+                                player.winRate >= 70 ? 'text-green-600' :
+                                player.winRate >= 50 ? 'text-blue-600' :
+                                player.winRate >= 30 ? 'text-yellow-600' :
+                                'text-red-600'
+                              }`}>
+                                {player.winRate?.toFixed(1)}%
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center text-sm text-gray-500">
+                              {player.lastLogin ? new Date(player.lastLogin).toLocaleDateString('vi-VN') : 'N/A'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="text-center py-12 text-gray-500">
+                    <p className="text-lg">Không có dữ liệu bảng xếp hạng</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              {state.leaderboard && state.leaderboard.length > 0 && (
+                <div className="bg-gray-100 p-4 text-center text-sm text-gray-600">
+                  Tổng số người chơi: <span className="font-semibold">{state.totalPlayers}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
