@@ -119,25 +119,24 @@ public class GatewayWebSocketHandler extends TextWebSocketHandler {
         if (sessionId != null) {
             // 2. Xóa khỏi map "danh bạ"
             activeClientSessions.remove(sessionId);
-            System.out.println("   Cleaning up session mapping for: " + sessionId);
 
-            // 3. Tạo và gửi một tin nhắn AUTH.LOGOUT đến Core
+
+            // Tạo và gửi một tin nhắn AUTH.LOGOUT đến Core
             // Core sẽ nhận tin này và kích hoạt logic cleanup (bao gồm cả forfeit)
             try {
                 MessageEnvelope logoutEnvelope = new MessageEnvelope();
                 logoutEnvelope.setType(MessageProtocol.Type.AUTH_LOGOUT_REQUEST);
                 logoutEnvelope.setSessionId(sessionId);
-                logoutEnvelope.setCorrelationId("auto-logout-" + System.currentTimeMillis());
-                
+
                 String logoutJson = JsonUtils.toJson(logoutEnvelope);
                 coreTcpClient.sendMessageToCore(logoutJson);
-                System.out.println("   Sent automatic LOGOUT to Core for disconnected session: " + sessionId);
+
             } catch (Exception e) {
-                System.err.println("   ❌ Error sending automatic LOGOUT to Core: " + e.getMessage());
+
             }
         }
         
-        // 4. Dọn dẹp pendingRequests (như cũ)
+        // Dọn dẹp pendingRequests (như cũ)
         pendingRequests.values().removeIf(s -> Objects.equals(s.getId(), session.getId()));
     }
 }

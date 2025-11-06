@@ -151,7 +151,6 @@ public class ClientConnectionHandler implements Runnable {
                 case MessageProtocol.Type.LOBBY_MATCH_REQUEST:
                     response = handleMatchRequest(envelope);
                     break;
-                // TODO: Thêm case LOBBY_MATCH_CANCEL
 
                 // Leaderboard
                 case MessageProtocol.Type.LOBBY_GET_LEADERBOARD_REQUEST:

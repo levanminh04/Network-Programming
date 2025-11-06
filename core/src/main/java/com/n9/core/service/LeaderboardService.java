@@ -97,7 +97,6 @@ public class LeaderboardService {
                     player.put("gamesLost", rs.getInt("games_lost"));
                     player.put("winRate", rs.getDouble("win_rate")); // Đã tính sẵn trong SQL
                     
-                    // 🆕 CHECK ONLINE STATUS (Memory-based)
                     boolean isOnline = sessionManager.isUserOnline(userIdStr);
                     player.put("online", isOnline);
                     
@@ -179,11 +178,9 @@ public class LeaderboardService {
                     userInfo.put("gamesLost", rs.getInt("games_lost"));
                     userInfo.put("winRate", rs.getDouble("win_rate"));
                     
-                    // 🆕 CHECK ONLINE STATUS
                     boolean isOnline = sessionManager.isUserOnline(userIdStr);
                     userInfo.put("online", isOnline);
                     
-                    // Last Login/Last Seen
                     java.sql.Timestamp lastLogin = rs.getTimestamp("last_login");
                     userInfo.put("lastLogin", lastLogin != null ? lastLogin.toString() : null);
                     if (isOnline) {
@@ -200,13 +197,7 @@ public class LeaderboardService {
         return null; // User không tồn tại hoặc chưa chơi trận nào
     }
 
-    /**
-     * Lấy tổng số users trong leaderboard (đã chơi ít nhất 1 trận).
-     * Dùng cho pagination ở Frontend.
-     * 
-     * @return Tổng số users
-     * @throws SQLException Nếu có lỗi database
-     */
+
     public int getTotalPlayersCount() throws SQLException {
         String sql = 
             "SELECT COUNT(*) AS total " +
