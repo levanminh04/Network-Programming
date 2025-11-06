@@ -105,7 +105,6 @@ public class CoreTcpClient implements InitializingBean, DisposableBean {
                 // Chỉ gửi ping nếu kết nối đang mở
                 if (socket != null && socket.isConnected() && !socket.isClosed()) {
                     System.out.println("💓 Sending PING to Core Server...");
-                    // THAY ĐỔI: Đảm bảo dùng đúng class Protocol
                     MessageEnvelope ping = MessageFactory.createRequest(MessageProtocol.Type.SYSTEM_PING, null);
                     sendMessageToCore(JsonUtils.toJson(ping));
                 }
