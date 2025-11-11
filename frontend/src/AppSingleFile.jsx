@@ -37,6 +37,12 @@ const MessageType = {
   GAME_OPPONENT_LEFT: 'GAME.OPPONENT_LEFT',
   GAME_FORFEIT_REQUEST: 'GAME.FORFEIT_REQUEST',
   GAME_FORFEIT_SUCCESS: 'GAME.FORFEIT_SUCCESS',
+  GAME_CHALLENGE_REQUEST: 'GAME.CHALLENGE_REQUEST',
+  GAME_CHALLENGE_REQUEST_ACK: 'GAME.CHALLENGE_REQUEST_ACK',
+  GAME_CHALLENGE_OFFER: 'GAME.CHALLENGE_OFFER',
+  GAME_CHALLENGE_RESPONSE: 'GAME.CHALLENGE_RESPONSE',
+  GAME_CHALLENGE_CANCELLED: 'GAME.CHALLENGE_CANCELLED',
+  GAME_CHALLENGE_FAILURE: 'GAME.CHALLENGE_FAILURE',
   
   // SYSTEM DOMAIN
   SYSTEM_WELCOME: 'SYSTEM.WELCOME',
@@ -137,6 +143,10 @@ const initialState = {
   userRank: null,
   totalPlayers: 0,
   leaderboardLoading: false,
+  
+  // Challenge State
+  incomingChallenge: null, // { challengeId, senderUserId, senderUsername, expiresAt, timeoutSeconds }
+  outgoingChallenge: null, // { challengeId, targetUserId, status }
   
   // Game State
   gameId: null,
@@ -249,6 +259,16 @@ const appReducer = (state, action) => {
     
     case 'CARD_SELECTED':
       // Show the selected card immediately
+      // ✅ FIX: Nếu payload = null → reset selection (cho phép retry)
+      if (action.payload === null) {
+        return {
+          ...state,
+          selectedCardId: null,
+          playerCard: null,
+          message: 'Vui lòng chọn lại lá bài khác'
+        };
+      }
+      
       const selectedCard = state.availableCards?.find(c => c.cardId === action.payload);
       return { 
         ...state, 
@@ -334,6 +354,9 @@ const appReducer = (state, action) => {
         // Reset matchmaking states
         matchmaking: false,
         matchFound: false,
+        // Reset challenge states
+        incomingChallenge: null,
+        outgoingChallenge: null,
         // Reset game states
         gameId: null,
         matchId: null,
@@ -353,6 +376,36 @@ const appReducer = (state, action) => {
         gameResult: null,
         message: null,
         error: null
+      };
+    
+    // Challenge Actions
+    case 'CHALLENGE_SENT':
+      return {
+        ...state,
+        outgoingChallenge: {
+          challengeId: action.payload.challengeId,
+          targetUserId: action.payload.targetUserId,
+          status: 'PENDING'
+        },
+        message: 'Đã gửi lời thách đấu...'
+      };
+    case 'CHALLENGE_RECEIVED':
+      return {
+        ...state,
+        incomingChallenge: action.payload // { challengeId, senderUserId, senderUsername, expiresAt, timeoutSeconds }
+      };
+    case 'CHALLENGE_CANCELLED':
+      return {
+        ...state,
+        incomingChallenge: null,
+        outgoingChallenge: null,
+        message: action.payload.reason ? `Thách đấu đã hủy: ${action.payload.reason}` : 'Thách đấu đã hủy'
+      };
+    case 'CHALLENGE_DECLINED':
+      return {
+        ...state,
+        incomingChallenge: null,
+        message: 'Đã từ chối thách đấu'
       };
     
     // Leaderboard Actions
@@ -517,10 +570,26 @@ const useWebSocket = (dispatch, sessionId) => {
               break;
             
             case MessageType.GAME_CARD_PLAY_FAILURE:
+              // ✅ FIX: Xử lý khi chọn bài thất bại (lá bài đã có người chọn)
+              const failurePayload = envelope.payload || {};
+              const errorMessage = failurePayload.message || envelope.error?.message || 'Lá bài không hợp lệ';
+              
+              // Reset selectedCardId và playerCard để cho phép chọn lại ngay
               dispatch({
                 type: 'SET_ERROR',
-                payload: envelope.error?.message || 'Không thể chơi bài'
+                payload: errorMessage
               });
+              
+              // Reset card selection (KHÔNG tạo action mới, dùng CARD_SELECTED với null)
+              dispatch({
+                type: 'CARD_SELECTED',
+                payload: null
+              });
+              
+              // Tự động clear error sau 2 giây (không block UI)
+              setTimeout(() => {
+                dispatch({ type: 'CLEAR_ERROR' });
+              }, 2000);
               break;
             
             case MessageType.GAME_OPPONENT_READY:
@@ -582,6 +651,39 @@ const useWebSocket = (dispatch, sessionId) => {
                 type: 'LEADERBOARD_ERROR',
                 payload: envelope.error?.message || 'Không thể tải thứ hạng'
               });
+              break;
+            
+            // Challenge Events
+            case MessageType.GAME_CHALLENGE_REQUEST_ACK:
+              console.log('⚔️ Challenge request acknowledged:', envelope.payload);
+              dispatch({
+                type: 'CHALLENGE_SENT',
+                payload: envelope.payload
+              });
+              break;
+            
+            case MessageType.GAME_CHALLENGE_OFFER:
+              console.log('📬 Received challenge offer:', envelope.payload);
+              dispatch({
+                type: 'CHALLENGE_RECEIVED',
+                payload: envelope.payload
+              });
+              break;
+            
+            case MessageType.GAME_CHALLENGE_CANCELLED:
+              console.log('❌ Challenge cancelled:', envelope.payload);
+              dispatch({
+                type: 'CHALLENGE_CANCELLED',
+                payload: envelope.payload
+              });
+              break;
+            
+            case MessageType.GAME_CHALLENGE_FAILURE:
+              dispatch({
+                type: 'SET_ERROR',
+                payload: envelope.error?.message || 'Thách đấu thất bại'
+              });
+              dispatch({ type: 'CHALLENGE_CANCELLED', payload: {} });
               break;
             
             case MessageType.SYSTEM_ERROR:
@@ -1111,6 +1213,7 @@ const LobbyView = () => {
                         <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Trận chơi</th>
                         <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Tỷ lệ thắng</th>
                         <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Lần cuối</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Hành động</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1168,6 +1271,23 @@ const LobbyView = () => {
                             <td className="px-4 py-3 text-center text-sm text-gray-500">
                               {player.lastLogin ? new Date(player.lastLogin).toLocaleDateString('vi-VN') : 'N/A'}
                             </td>
+                            <td className="px-4 py-3 text-center">
+                              {player.online && !isCurrentUser ? (
+                                <button
+                                  onClick={() => {
+                                    console.log('⚔️ Challenging user:', player.userId);
+                                    sendMessage(MessageType.GAME_CHALLENGE_REQUEST, { targetUserId: player.userId });
+                                    handleCloseLeaderboard();
+                                  }}
+                                  className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors"
+                                  disabled={state.outgoingChallenge || state.incomingChallenge}
+                                >
+                                  ⚔️ Thách đấu
+                                </button>
+                              ) : (
+                                <span className="text-gray-400 text-sm">—</span>
+                              )}
+                            </td>
                           </tr>
                         );
                       })}
@@ -1186,6 +1306,58 @@ const LobbyView = () => {
                   Tổng số người chơi: <span className="font-semibold">{state.totalPlayers}</span>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Incoming Challenge Modal */}
+        {state.incomingChallenge && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-red-500 to-orange-500 text-white p-6 text-center">
+                <div className="text-5xl mb-3">⚔️</div>
+                <h2 className="text-2xl font-bold">Lời thách đấu!</h2>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 text-center">
+                <p className="text-lg text-gray-700 mb-4">
+                  <span className="font-bold text-red-600">{state.incomingChallenge.senderUsername}</span>
+                  {' '}muốn thách đấu bạn!
+                </p>
+                <div className="bg-yellow-100 text-yellow-800 p-3 rounded-lg text-sm">
+                  ⏱️ Hết hạn sau {state.incomingChallenge.timeoutSeconds || 15} giây
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 p-6 pt-0">
+                <button
+                  onClick={() => {
+                    sendMessage(MessageType.GAME_CHALLENGE_RESPONSE, {
+                      challengeId: state.incomingChallenge.challengeId,
+                      accept: false
+                    });
+                    dispatch({ type: 'CHALLENGE_DECLINED' });
+                  }}
+                  className="flex-1 px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-semibold"
+                >
+                  ❌ Từ chối
+                </button>
+                <button
+                  onClick={() => {
+                    sendMessage(MessageType.GAME_CHALLENGE_RESPONSE, {
+                      challengeId: state.incomingChallenge.challengeId,
+                      accept: true
+                    });
+                    dispatch({ type: 'CHALLENGE_DECLINED' }); // Clear modal
+                  }}
+                  className="flex-1 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold"
+                >
+                  ✅ Chấp nhận
+                </button>
+              </div>
             </div>
           </div>
         )}

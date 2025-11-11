@@ -4,6 +4,7 @@ import com.n9.core.database.DatabaseManager;
 import com.n9.core.network.ClientConnectionHandler;
 import com.n9.core.network.CoreServerListener;
 import com.n9.core.service.AuthService;
+import com.n9.core.service.ChallengeService;
 import com.n9.core.service.GameService;
 import com.n9.core.service.LeaderboardService;
 import com.n9.core.service.MatchmakingService;
@@ -38,6 +39,9 @@ public final class CoreServer {
         var leaderboardService = new LeaderboardService(dbManager, sessionManager);
         var matchmakingService = new MatchmakingService(gameService, sessionManager, activeConnections, scheduler);
 
+        // Khởi tạo ChallengeService
+        var challengeService = new ChallengeService(sessionManager, matchmakingService, activeConnections, scheduler);
+
         var listener = new CoreServerListener(
                 serverSocket,
                 executor,
@@ -46,7 +50,8 @@ public final class CoreServer {
                 sessionManager,
                 activeConnections,
                 matchmakingService,
-                leaderboardService
+                leaderboardService,
+                challengeService // Truyền vào listener
         );
         listener.start();
         matchmakingService.startMatchmakingLoop();

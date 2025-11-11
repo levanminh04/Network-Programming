@@ -65,6 +65,35 @@ public class MatchmakingService {
         }
     }
 
+    // Kiểm tra user có đang trong queue không (dùng cho Challenge validation)
+    public boolean isUserInQueue(String userId) {
+        return usersInQueue.contains(userId);
+    }
+
+    // Tạo direct match (bypass queue) cho challenge system
+    public void createDirectMatch(String player1Id, String player2Id) {
+        String matchId = IdUtils.generateMatchId();
+
+        String p1SessionId = getSessionIdForUser(player1Id);
+        String p2SessionId = getSessionIdForUser(player2Id);
+
+        sessionManager.setMatchId(p1SessionId, matchId);
+        sessionManager.setMatchId(p2SessionId, matchId);
+
+        String player1Username = getUsernameForId(player1Id);
+        String player2Username = getUsernameForId(player2Id);
+
+        notifyPlayerMatchFound(player1Id, p1SessionId, matchId, player2Id, player2Username);
+        notifyPlayerMatchFound(player2Id, p2SessionId, matchId, player1Id, player1Username);
+
+        scheduler.schedule(() -> {
+            GameService.GameState newGame = gameService.initializeGame(matchId, player1Id, player2Id);
+            if (newGame == null) {
+                System.err.println("❌ Failed to initialize game for match " + matchId);
+            }
+        }, 2, TimeUnit.SECONDS);
+    }
+
     private void tryMatchmaking() {
         if (usersInQueue.size() >= 2) {
             String player1Id = matchmakingQueue.poll(); // lấy và loại bỏ phần tử đầu tiên (đầu hàng).

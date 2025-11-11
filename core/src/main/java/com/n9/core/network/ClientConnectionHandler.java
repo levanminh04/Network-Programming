@@ -2,6 +2,7 @@ package com.n9.core.network;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.n9.core.service.AuthService;
+import com.n9.core.service.ChallengeService;
 import com.n9.core.service.GameService;
 import com.n9.core.service.LeaderboardService;
 import com.n9.core.service.MatchmakingService;
@@ -10,6 +11,8 @@ import com.n9.shared.MessageProtocol;
 import com.n9.shared.constants.GameConstants;
 import com.n9.shared.model.dto.auth.LoginRequestDto;
 import com.n9.shared.model.dto.auth.RegisterRequestDto;
+import com.n9.shared.model.dto.challenge.ChallengeRequestDto;
+import com.n9.shared.model.dto.challenge.ChallengeResponseDto;
 import com.n9.shared.model.dto.game.CardDto;
 import com.n9.shared.model.dto.game.PlayCardRequestDto;
 import com.n9.shared.protocol.ErrorInfo;
@@ -43,6 +46,7 @@ public class ClientConnectionHandler implements Runnable {
     private final SessionManager sessionManager;
     private final MatchmakingService matchmakingService;
     private final LeaderboardService leaderboardService;
+    private final ChallengeService challengeService; // Thêm ChallengeService
     private final ExecutorService pool;
     private final ConcurrentHashMap<String, ClientConnectionHandler> activeConnections;
 
@@ -56,6 +60,7 @@ public class ClientConnectionHandler implements Runnable {
             SessionManager sessionManager,
             MatchmakingService matchmakingService,
             LeaderboardService leaderboardService,
+            ChallengeService challengeService, // Thêm parameter
             ExecutorService pool,
             ConcurrentHashMap<String, ClientConnectionHandler> activeConnections
     ) {
@@ -65,6 +70,7 @@ public class ClientConnectionHandler implements Runnable {
         this.sessionManager = sessionManager;
         this.matchmakingService = matchmakingService;
         this.leaderboardService = leaderboardService;
+        this.challengeService = challengeService; // Inject
         this.pool = pool;
         this.activeConnections = activeConnections;
     }
@@ -158,6 +164,17 @@ public class ClientConnectionHandler implements Runnable {
                     break;
                 case MessageProtocol.Type.LOBBY_GET_USER_RANK_REQUEST:
                     response = handleGetUserRank(envelope);
+                    break;
+
+                // --- CHALLENGE ---
+                case MessageProtocol.Type.GAME_CHALLENGE_REQUEST:
+                    response = handleChallengeRequest(envelope);
+                    break;
+                case MessageProtocol.Type.GAME_CHALLENGE_RESPONSE:
+                    response = handleChallengeResponse(envelope);
+                    break;
+                case MessageProtocol.Type.GAME_CHALLENGE_CANCELLED:
+                    response = handleChallengeCancel(envelope);
                     break;
 
                 // --- GAME ---
@@ -364,6 +381,137 @@ public class ClientConnectionHandler implements Runnable {
         }
     }
 
+    // ============================================
+    // CHALLENGE HANDLERS
+    // ============================================
+
+    /**
+     * Xử lý yêu cầu challenge từ sender → target.
+     * Payload: { "targetUserId": "123" }
+     */
+    private MessageEnvelope handleChallengeRequest(MessageEnvelope envelope) {
+        try {
+            String sessionId = envelope.getSessionId();
+            if (sessionId == null) {
+                return MessageFactory.createErrorResponse(envelope, "UNAUTHORIZED", "Session required");
+            }
+
+            SessionManager.SessionContext session = sessionManager.getSession(sessionId);
+            if (session == null) {
+                return MessageFactory.createErrorResponse(envelope, "INVALID_SESSION", "Session not found");
+            }
+
+            String senderId = session.getUserId();
+
+            // Parse request
+            ChallengeRequestDto request = JsonUtils.fromJson(
+                JsonUtils.toJson(envelope.getPayload()), 
+                ChallengeRequestDto.class
+            );
+
+            if (request == null || request.getTargetUserId() == null) {
+                return MessageFactory.createErrorResponse(envelope, 
+                    "INVALID_PAYLOAD", 
+                    "Missing targetUserId");
+            }
+
+            // Tạo challenge
+            var challenge = challengeService.createChallenge(senderId, request.getTargetUserId());
+
+            // Response ACK
+            Map<String, Object> ackPayload = new HashMap<>();
+            ackPayload.put("challengeId", challenge.getChallengeId());
+            ackPayload.put("status", "PENDING");
+
+            return MessageFactory.createResponse(envelope, 
+                MessageProtocol.Type.GAME_CHALLENGE_REQUEST_ACK, 
+                ackPayload);
+
+        } catch (IllegalArgumentException e) {
+            return MessageFactory.createErrorResponse(envelope, "CHALLENGE_REJECTED", e.getMessage());
+        } catch (Exception e) {
+            e.printStackTrace();
+            return MessageFactory.createErrorResponse(envelope, 
+                "INTERNAL_ERROR", 
+                "Failed to create challenge: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Xử lý response từ target (accept/decline).
+     * Payload: { "challengeId": "ch-xxx", "accept": true }
+     */
+    private MessageEnvelope handleChallengeResponse(MessageEnvelope envelope) {
+        try {
+            String sessionId = envelope.getSessionId();
+            if (sessionId == null) {
+                return MessageFactory.createErrorResponse(envelope, "UNAUTHORIZED", "Session required");
+            }
+
+            SessionManager.SessionContext session = sessionManager.getSession(sessionId);
+            if (session == null) {
+                return MessageFactory.createErrorResponse(envelope, "INVALID_SESSION", "Session not found");
+            }
+
+            // Parse response
+            ChallengeResponseDto response = JsonUtils.fromJson(
+                JsonUtils.toJson(envelope.getPayload()), 
+                ChallengeResponseDto.class
+            );
+
+            if (response == null || response.getChallengeId() == null) {
+                return MessageFactory.createErrorResponse(envelope, 
+                    "INVALID_PAYLOAD", 
+                    "Missing challengeId or accept field");
+            }
+
+            // Process response
+            challengeService.handleChallengeResponse(response.getChallengeId(), response.isAccept());
+
+            // ACK
+            return MessageFactory.createResponse(envelope, 
+                MessageProtocol.Type.GAME_CHALLENGE_RESPONSE, 
+                Map.of("status", "OK"));
+
+        } catch (IllegalArgumentException e) {
+            return MessageFactory.createErrorResponse(envelope, "CHALLENGE_ERROR", e.getMessage());
+        } catch (Exception e) {
+            e.printStackTrace();
+            return MessageFactory.createErrorResponse(envelope, 
+                "INTERNAL_ERROR", 
+                "Failed to process challenge response: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Xử lý cancel từ sender (optional).
+     * Payload: { "challengeId": "ch-xxx" }
+     */
+    private MessageEnvelope handleChallengeCancel(MessageEnvelope envelope) {
+        try {
+            Map<String, Object> payload = (Map<String, Object>) envelope.getPayload();
+            String challengeId = (String) payload.get("challengeId");
+
+            if (challengeId == null) {
+                return MessageFactory.createErrorResponse(envelope, 
+                    "INVALID_PAYLOAD", 
+                    "Missing challengeId");
+            }
+
+            challengeService.cancelChallenge(challengeId, "USER_CANCELLED");
+
+            return MessageFactory.createResponse(envelope, 
+                MessageProtocol.Type.GAME_CHALLENGE_CANCELLED, 
+                Map.of("status", "OK"));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return MessageFactory.createErrorResponse(envelope, 
+                "INTERNAL_ERROR", 
+                "Failed to cancel challenge: " + e.getMessage());
+        }
+    }
+
 
     public synchronized void sendMessage(String jsonMessage) {
         try {
@@ -409,6 +557,9 @@ public class ClientConnectionHandler implements Runnable {
                 
                 // Hủy matchmaking nếu đang chờ
                 matchmakingService.cancelMatch(userId);
+                
+                // Hủy challenge nếu đang trong challenge (THÊM)
+                challengeService.handleUserDisconnect(userId);
                 
                 // Xóa session
                 sessionManager.removeSession(context.getSessionId());
