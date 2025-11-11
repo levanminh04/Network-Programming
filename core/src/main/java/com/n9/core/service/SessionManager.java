@@ -19,6 +19,7 @@ public class SessionManager {
         private final String userId;
         private final String username;
         private String currentMatchId;
+        private String challengeId; // Thêm challengeId
         private long lastActivityTimestamp;
 
         public SessionContext(String sid, String uid, String uname) {
@@ -50,6 +51,14 @@ public class SessionManager {
 
         public void setCurrentMatchId(String mid) {
             this.currentMatchId = mid;
+        }
+
+        public String getChallengeId() {
+            return challengeId;
+        }
+
+        public void setChallengeId(String cid) {
+            this.challengeId = cid;
         }
     }
 

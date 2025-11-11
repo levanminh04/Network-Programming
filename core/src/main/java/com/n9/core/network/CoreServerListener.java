@@ -1,6 +1,7 @@
 package com.n9.core.network;
 
 import com.n9.core.service.AuthService;
+import com.n9.core.service.ChallengeService;
 import com.n9.core.service.GameService;
 import com.n9.core.service.LeaderboardService;
 import com.n9.core.service.MatchmakingService; // Thêm import
@@ -24,6 +25,7 @@ public class CoreServerListener implements Runnable {
     private final SessionManager sessionManager;
     private final MatchmakingService matchmakingService; // Thêm
     private final LeaderboardService leaderboardService;
+    private final ChallengeService challengeService; // Thêm ChallengeService
     private final ConcurrentHashMap<String, ClientConnectionHandler> activeConnections;
     private volatile boolean running = true;
 
@@ -35,7 +37,8 @@ public class CoreServerListener implements Runnable {
             SessionManager sessionManager,
             ConcurrentHashMap<String, ClientConnectionHandler> activeConnections,
             MatchmakingService matchmakingService,
-            LeaderboardService leaderboardService
+            LeaderboardService leaderboardService,
+            ChallengeService challengeService // Thêm parameter
     ) {
         this.serverSocket = serverSocket;
         this.pool = pool;
@@ -45,6 +48,7 @@ public class CoreServerListener implements Runnable {
         this.activeConnections = activeConnections;
         this.matchmakingService = matchmakingService;
         this.leaderboardService = leaderboardService;
+        this.challengeService = challengeService; // Inject
     }
 
     public void start() {
@@ -68,6 +72,7 @@ public class CoreServerListener implements Runnable {
                         sessionManager,
                         matchmakingService,
                         leaderboardService,
+                        challengeService, // Truyền vào handler
                         pool,
                         activeConnections
                 );

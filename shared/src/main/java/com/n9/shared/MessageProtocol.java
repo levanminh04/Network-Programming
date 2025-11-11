@@ -105,6 +105,28 @@ public final class MessageProtocol {
         /** Server xác nhận đã xử lý forfeit. */
         public static final String GAME_FORFEIT_SUCCESS    = "GAME.FORFEIT_SUCCESS";
 
+        // ============================
+        // GAME DOMAIN - CHALLENGE (Thách Đấu Trực Tiếp)
+        // ============================
+        
+        /** Client gửi yêu cầu thách đấu một người chơi cụ thể. */
+        public static final String GAME_CHALLENGE_REQUEST = "GAME.CHALLENGE_REQUEST";
+        
+        /** Server xác nhận đã nhận request thách đấu (gửi cho sender). */
+        public static final String GAME_CHALLENGE_REQUEST_ACK = "GAME.CHALLENGE_REQUEST_ACK";
+        
+        /** Server gửi lời mời thách đấu đến target user (PUSH notification). */
+        public static final String GAME_CHALLENGE_OFFER = "GAME.CHALLENGE_OFFER";
+        
+        /** Target user gửi response (accept/decline). */
+        public static final String GAME_CHALLENGE_RESPONSE = "GAME.CHALLENGE_RESPONSE";
+        
+        /** Server thông báo challenge đã bị hủy (timeout/cancelled/declined). */
+        public static final String GAME_CHALLENGE_CANCELLED = "GAME.CHALLENGE_CANCELLED";
+        
+        /** Server thông báo challenge thất bại (validation error). */
+        public static final String GAME_CHALLENGE_FAILURE = "GAME.CHALLENGE_FAILURE";
+
 
         // ============================
         // SYSTEM DOMAIN

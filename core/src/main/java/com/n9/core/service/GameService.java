@@ -41,7 +41,7 @@ public class GameService {
     public GameService(DatabaseManager dbManager,
                        ConcurrentHashMap<String, ClientConnectionHandler> activeConnections,
                        ScheduledExecutorService scheduler,
-                       SessionManager sessionManager) { // Thêm
+                       SessionManager sessionManager) {
         this.dbManager = dbManager;
         this.activeConnections = activeConnections;
         this.scheduler = scheduler;
@@ -319,11 +319,19 @@ public class GameService {
             if ((isPlayer1 && game.getPlayer1PlayedCard() != null) || (!isPlayer1 && game.getPlayer2PlayedCard() != null))
                 throw new IllegalArgumentException("Already played this round.");
 
-            playedCard = CardUtils.findAndRemoveCard(game.getAvailableCards(), cardId);  // lấy ra và xóa ngay lá mà  người chơi pick
-            // sau bươc này game.getAvailableCards() bị -1
-
-            if (playedCard == null)
+            // ✅ FIX: Kiểm tra lá bài có trong availableCards TRƯỚC KHI xóa
+            CardDto cardToCheck = CardUtils.findCard(game.getAvailableCards(), cardId);
+            if (cardToCheck == null) {
+                // Lá bài không tồn tại hoặc đã bị player khác chọn
                 throw new IllegalArgumentException("Card " + cardId + " is not available or already played.");
+            }
+
+            // Bây giờ mới xóa (đảm bảo card tồn tại)
+            playedCard = CardUtils.findAndRemoveCard(game.getAvailableCards(), cardId);
+            if (playedCard == null) {
+                // Defensive programming: Không bao giờ xảy ra vì đã check ở trên
+                throw new IllegalStateException("Unexpected error: Card validation passed but removal failed.");
+            }
 
             if (isPlayer1) {
                 game.setPlayer1PlayedCard(playedCard);
@@ -555,8 +563,35 @@ public class GameService {
 
     /* Dọn dẹp game khỏi bộ nhớ. */
     public void cleanupGame(String matchId) {
+        // [1] Get game state BEFORE removing (to extract player IDs)
+        GameState game = activeGames.get(matchId);
+        
+        // [2] Remove game state and lock
         activeGames.remove(matchId);
         gameLocks.remove(matchId);
+        
+        // [3] Clear currentMatchId from both players' SessionContext
+        if (game != null) {
+            String player1Id = game.getPlayer1Id();
+            String player2Id = game.getPlayer2Id();
+            
+            if (player1Id != null) {
+                SessionManager.SessionContext ctx1 = sessionManager.getSessionByUserId(player1Id);
+                if (ctx1 != null) {
+                    ctx1.setCurrentMatchId(null);
+                    System.out.println("   ✅ Cleared matchId for player1: " + player1Id);
+                }
+            }
+            
+            if (player2Id != null) {
+                SessionManager.SessionContext ctx2 = sessionManager.getSessionByUserId(player2Id);
+                if (ctx2 != null) {
+                    ctx2.setCurrentMatchId(null);
+                    System.out.println("   ✅ Cleared matchId for player2: " + player2Id);
+                }
+            }
+        }
+        
         System.out.println("🧹 Cleaned up game state for match " + matchId);
     }
 
