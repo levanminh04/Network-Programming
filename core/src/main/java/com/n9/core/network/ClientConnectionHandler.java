@@ -252,6 +252,8 @@ public class ClientConnectionHandler implements Runnable {
             // Hủy matchmaking nếu đang chờ
             matchmakingService.cancelMatch(userId);
             
+            challengeService.cleanupUserChallenges(userId);
+            
             // Xóa khỏi activeConnections và session
             activeConnections.remove(userId);
             sessionManager.removeSession(context.getSessionId());

@@ -319,17 +319,14 @@ public class GameService {
             if ((isPlayer1 && game.getPlayer1PlayedCard() != null) || (!isPlayer1 && game.getPlayer2PlayedCard() != null))
                 throw new IllegalArgumentException("Already played this round.");
 
-            // ✅ FIX: Kiểm tra lá bài có trong availableCards TRƯỚC KHI xóa
             CardDto cardToCheck = CardUtils.findCard(game.getAvailableCards(), cardId);
             if (cardToCheck == null) {
                 // Lá bài không tồn tại hoặc đã bị player khác chọn
                 throw new IllegalArgumentException("Card " + cardId + " is not available or already played.");
             }
 
-            // Bây giờ mới xóa (đảm bảo card tồn tại)
             playedCard = CardUtils.findAndRemoveCard(game.getAvailableCards(), cardId);
             if (playedCard == null) {
-                // Defensive programming: Không bao giờ xảy ra vì đã check ở trên
                 throw new IllegalStateException("Unexpected error: Card validation passed but removal failed.");
             }
 

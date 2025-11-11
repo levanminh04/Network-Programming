@@ -223,6 +223,15 @@ public class ChallengeService {
         });
     }
     
+    /**
+     * Alias method for handleUserDisconnect() - called from handleLogout().
+     * 
+     * @param userId ID của user
+     */
+    public void cleanupUserChallenges(String userId) {
+        handleUserDisconnect(userId);
+    }
+    
     // ============================
     // PRIVATE HELPERS
     // ============================
