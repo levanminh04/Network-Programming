@@ -40,6 +40,9 @@ public final class CoreServer {
         var matchmakingService = new MatchmakingService(gameService, sessionManager, activeConnections, scheduler);
         var challengeService = new ChallengeService(sessionManager, matchmakingService, activeConnections, scheduler);
 
+        // Khởi tạo ChallengeService
+        var challengeService = new ChallengeService(sessionManager, matchmakingService, activeConnections, scheduler);
+
         var listener = new CoreServerListener(
                 serverSocket,
                 executor,
