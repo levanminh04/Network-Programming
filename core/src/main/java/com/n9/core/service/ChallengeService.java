@@ -26,10 +26,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * - Xử lý response (accept/decline)
  * - Quản lý timeout (15 giây)
  * - Cleanup khi user disconnect
- * 
- * @author N9 Team
- * @version 1.0.0
- * @since 2025-11-07
+ *
  */
 public class ChallengeService {
     
@@ -71,10 +68,7 @@ public class ChallengeService {
         this.timeoutTasks = new ConcurrentHashMap<>();
     }
     
-    // ============================
-    // PUBLIC API
-    // ============================
-    
+
     /**
      * Tạo challenge từ sender → target.
      * 
@@ -86,18 +80,14 @@ public class ChallengeService {
     public ChallengeSession createChallenge(String senderId, String targetId) 
             throws IllegalArgumentException {
         
-        System.out.println("⚔️ Creating challenge: " + senderId + " → " + targetId);
-        
-        // [1] VALIDATION
+
         validateChallengeRequest(senderId, targetId);
         
-        // [2] CREATE CHALLENGE SESSION
         String challengeId = "ch-" + UUID.randomUUID().toString();
         ChallengeSession challenge = new ChallengeSession(
             challengeId, senderId, targetId, CHALLENGE_TIMEOUT_SECONDS
         );
         
-        // [3] STORE
         activeChallenges.put(challengeId, challenge);
         challengeLocks.put(challengeId, new ReentrantLock());
         
@@ -118,7 +108,6 @@ public class ChallengeService {
         // [6] SEND OFFER TO TARGET
         sendChallengeOfferToTarget(challenge);
         
-        System.out.println("   ✅ Challenge created: " + challengeId);
         return challenge;
     }
     
@@ -132,8 +121,7 @@ public class ChallengeService {
     public void handleChallengeResponse(String challengeId, boolean accept) 
             throws IllegalArgumentException {
         
-        System.out.println("📨 Challenge response: " + challengeId + " → " + (accept ? "ACCEPT" : "DECLINE"));
-        
+
         Lock lock = challengeLocks.get(challengeId);
         if (lock == null) {
             throw new IllegalArgumentException("Challenge not found or expired.");
@@ -150,14 +138,12 @@ public class ChallengeService {
             cancelTimeoutTask(challengeId);
             
             if (accept) {
-                // [ACCEPT PATH]
+                // [ACCEPT]
                 challenge.setStatus(ChallengeSession.ChallengeStatus.ACCEPTED);
-                System.out.println("   ✅ Challenge accepted, creating match...");
                 createDirectMatch(challenge);
             } else {
-                // [DECLINE PATH]
+                // [DECLINE]
                 challenge.setStatus(ChallengeSession.ChallengeStatus.DECLINED);
-                System.out.println("   ❌ Challenge declined");
                 notifyChallengeCancelled(challenge, "DECLINED");
             }
             
@@ -174,8 +160,7 @@ public class ChallengeService {
      * @param reason Lý do hủy
      */
     public void cancelChallenge(String challengeId, String reason) {
-        System.out.println("🚫 Cancelling challenge: " + challengeId + " (" + reason + ")");
-        
+
         Lock lock = challengeLocks.get(challengeId);
         if (lock == null) return;
         
@@ -223,10 +208,16 @@ public class ChallengeService {
         });
     }
     
-    // ============================
-    // PRIVATE HELPERS
-    // ============================
+    /**
+     * Alias method for handleUserDisconnect() - called from handleLogout().
+     * 
+     * @param userId ID của user
+     */
+    public void cleanupUserChallenges(String userId) {
+        handleUserDisconnect(userId);
+    }
     
+
     /**
      * Validate điều kiện thách đấu.
      */
@@ -310,12 +301,8 @@ public class ChallengeService {
         if (targetHandler != null) {
             try {
                 targetHandler.sendMessage(JsonUtils.toJson(envelope));
-                System.out.println("   📤 Sent CHALLENGE_OFFER to " + targetId);
             } catch (Exception e) {
-                System.err.println("   ❌ Failed to send CHALLENGE_OFFER: " + e.getMessage());
             }
-        } else {
-            System.err.println("   ⚠️ Target handler not found: " + targetId);
         }
     }
     
@@ -330,12 +317,9 @@ public class ChallengeService {
             // Gọi MatchmakingService để tạo match
             matchmakingService.createDirectMatch(senderId, targetId);
             
-            System.out.println("   🎮 Direct match created: " + senderId + " vs " + targetId);
-            
+
         } catch (Exception e) {
-            System.err.println("   ❌ Failed to create direct match: " + e.getMessage());
             e.printStackTrace();
-            // Notify both users về error
             notifyChallengeCancelled(challenge, "MATCH_CREATION_FAILED");
         }
     }
@@ -344,8 +328,7 @@ public class ChallengeService {
      * Xử lý timeout (15 giây).
      */
     private void handleChallengeTimeout(String challengeId) {
-        System.out.println("⏰ Challenge timeout: " + challengeId);
-        
+
         Lock lock = challengeLocks.get(challengeId);
         if (lock == null) return;
         
@@ -383,7 +366,6 @@ public class ChallengeService {
             notifyUser(challenge.getTargetId(), envelope);
         }
         
-        System.out.println("   📢 Notified both users: " + reason);
     }
     
     /**
@@ -400,7 +382,6 @@ public class ChallengeService {
             try {
                 handler.sendMessage(JsonUtils.toJson(envelope));
             } catch (Exception e) {
-                System.err.println("   ⚠️ Failed to notify user " + userId + ": " + e.getMessage());
             }
         }
     }
@@ -412,20 +393,16 @@ public class ChallengeService {
         ScheduledFuture<?> task = timeoutTasks.remove(challengeId);
         if (task != null && !task.isDone()) {
             task.cancel(false);
-            System.out.println("   ⏹️ Cancelled timeout task: " + challengeId);
         }
     }
     
-    /**
-     * Cleanup challenge (remove from maps, clear session IDs).
-     */
+
     private void cleanupChallenge(String challengeId) {
         ChallengeSession challenge = activeChallenges.remove(challengeId);
         challengeLocks.remove(challengeId);
         timeoutTasks.remove(challengeId);
         
         if (challenge != null) {
-            // Clear challenge IDs from session contexts
             SessionManager.SessionContext senderCtx = sessionManager.getSessionByUserId(challenge.getSenderId());
             SessionManager.SessionContext targetCtx = sessionManager.getSessionByUserId(challenge.getTargetId());
             
@@ -436,7 +413,6 @@ public class ChallengeService {
                 targetCtx.setChallengeId(null);
             }
             
-            System.out.println("🧹 Cleaned up challenge: " + challengeId);
         }
     }
 }

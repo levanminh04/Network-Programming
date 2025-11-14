@@ -38,6 +38,7 @@ public final class CoreServer {
         var authService = new AuthService(dbManager);
         var leaderboardService = new LeaderboardService(dbManager, sessionManager);
         var matchmakingService = new MatchmakingService(gameService, sessionManager, activeConnections, scheduler);
+        var challengeService = new ChallengeService(sessionManager, matchmakingService, activeConnections, scheduler);
 
         // Khởi tạo ChallengeService
         var challengeService = new ChallengeService(sessionManager, matchmakingService, activeConnections, scheduler);
@@ -51,7 +52,7 @@ public final class CoreServer {
                 activeConnections,
                 matchmakingService,
                 leaderboardService,
-                challengeService // Truyền vào listener
+                challengeService
         );
         listener.start();
         matchmakingService.startMatchmakingLoop();
@@ -60,7 +61,7 @@ public final class CoreServer {
             System.out.println("\n=== Shutting down Core Server ===");
             try { serverSocket.close(); } catch (Exception ignored) {}
             executor.shutdownNow();
-            scheduler.shutdownNow(); // Tắt cả scheduler
+            scheduler.shutdownNow();
             dbManager.shutdown();
             System.out.println("=== Server shutdown complete ===");
         }));
