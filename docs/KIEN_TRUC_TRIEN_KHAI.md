@@ -1,696 +1,181 @@
 # KIẾN TRÚC TRIỂN KHAI HỆ THỐNG GAME RÚT BÀI MAY MẮN
 
-## 📐 TỔNG QUAN KIẾN TRÚC
+## TỔNG QUAN KIẾN TRÚC
 
-Hệ thống Game Rút Bài May Mắn được thiết kế theo mô hình **4-Tier Distributed Architecture** (Kiến trúc phân tán 4 tầng) với sự phân tách rõ ràng giữa các lớp trách nhiệm, đảm bảo tính module hóa, khả năng mở rộng và bảo trì dễ dàng.
+Hệ thống Game Rút Bài May Mắn được thiết kế theo mô hình kiến trúc phân tán 4 tầng (4-Tier Distributed Architecture) với sự phân tách rõ ràng giữa các lớp trách nhiệm. Kiến trúc này đảm bảo tính module hóa, khả năng mở rộng và dễ dàng bảo trì trong quá trình phát triển và vận hành hệ thống.
 
-### 🎯 Mục Tiêu Thiết Kế
+### Mục Tiêu Thiết Kế
 
-1. **Tách biệt trách nhiệm (Separation of Concerns)**
-   - Mỗi tầng có nhiệm vụ riêng biệt, không phụ thuộc chặt chẽ vào nhau
-   - Frontend chỉ quan tâm đến UI/UX
-   - Gateway xử lý protocol translation và routing
-   - Core chứa toàn bộ business logic
-   - Database quản lý persistent data
+Kiến trúc hệ thống hướng đến bốn mục tiêu chính. Thứ nhất là nguyên tắc tách biệt trách nhiệm (Separation of Concerns), trong đó mỗi tầng có nhiệm vụ riêng biệt và không phụ thuộc chặt chẽ vào nhau. Frontend tập trung vào trải nghiệm người dùng và giao diện, Gateway xử lý việc chuyển đổi giao thức và định tuyến message, Core chứa toàn bộ logic nghiệp vụ của game, và Database quản lý dữ liệu bền vững.
 
-2. **Khả năng mở rộng (Scalability)**
-   - Có thể scale horizontal từng tầng độc lập
-   - Gateway có thể load balance nhiều Core servers
-   - Database có thể replicate/shard khi cần
+Thứ hai là khả năng mở rộng (Scalability), cho phép scale horizontal từng tầng một cách độc lập. Gateway có thể cân bằng tải cho nhiều Core servers, và Database có thể thực hiện replicate hoặc shard khi cần thiết để đáp ứng lưu lượng truy cập tăng cao.
 
-3. **Bảo mật (Security)**
-   - Core server không expose trực tiếp ra internet
-   - Gateway đóng vai trò reverse proxy và firewall
-   - Authentication/Authorization tập trung
+Thứ ba là bảo mật (Security), trong đó Core server không được expose trực tiếp ra internet. Gateway đóng vai trò như một reverse proxy và firewall, tập trung xử lý Authentication và Authorization cho toàn bộ hệ thống.
 
-4. **Hiệu năng cao (High Performance)**
-   - WebSocket cho realtime communication
-   - TCP socket với binary framing cho throughput cao
-   - Connection pooling và thread pooling
+Thứ tư là hiệu năng cao (High Performance), đạt được thông qua việc sử dụng WebSocket cho giao tiếp realtime, TCP socket với binary framing để đạt throughput cao, cùng với connection pooling và thread pooling để tối ưu hóa việc sử dụng tài nguyên hệ thống
 
----
+## KIẾN TRÚC 4 TẦNG CHI TIẾT
 
-## 🏗️ KIẾN TRÚC 4 TẦNG CHI TIẾT
+### Tầng Giao Diện (Client Tier)
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          CLIENT TIER (Tầng Giao Diện)                        │
-│  ┌────────────────────────────────────────────────────────────────────┐     │
-│  │                    Web Browser (React.js Application)              │     │
-│  │                           Port: 5173 (Development)                 │     │
-│  │                                                                    │     │
-│  │  Components:                                                       │     │
-│  │  • <<component>> AuthView        - Đăng ký/Đăng nhập             │     │
-│  │  • <<component>> LobbyView       - Tìm trận, Leaderboard         │     │
-│  │  • <<component>> GameView        - Chơi game, hiển thị bài       │     │
-│  │  • AppContext (State Management) - Global state với useReducer   │     │
-│  │  • useWebSocket Hook             - WebSocket connection manager  │     │
-│  │                                                                    │     │
-│  │  Technology Stack:                                                 │     │
-│  │  [React 18.2] [WebSocket API] [Tailwind CSS] [Vite]             │     │
-│  └────────────────────────────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                       ↓
-                            WebSocket Connection
-                            ws://localhost:8080/ws
-                            ┌────────────────────────┐
-                            │ Protocol: WebSocket    │
-                            │ Format: JSON           │
-                            │ Encoding: UTF-8        │
-                            │ Auto-Reconnect: ✅     │
-                            │ Exponential Backoff    │
-                            └────────────────────────┘
-                                       ↓
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                      PRESENTATION TIER (Tầng Trung Gian)                     │
-│  ┌────────────────────────────────────────────────────────────────────┐     │
-│  │              Gateway Server (Spring Boot Application)              │     │
-│  │                           Port: 8080                               │     │
-│  │                                                                    │     │
-│  │  Components:                                                       │     │
-│  │  • <<component>> GatewayWebSocketHandler                          │     │
-│  │    ├─ afterConnectionEstablished() - Handle new WebSocket conn   │     │
-│  │    ├─ handleTextMessage()          - Route messages to Core      │     │
-│  │    └─ afterConnectionClosed()      - Cleanup on disconnect       │     │
-│  │                                                                    │     │
-│  │  • <<component>> CoreTcpClient                                    │     │
-│  │    ├─ connect()                    - Establish TCP to Core       │     │
-│  │    ├─ startListening()             - Background thread read Core │     │
-│  │    ├─ startHeartbeat()             - PING/PONG every 5s         │     │
-│  │    └─ sendMessageToCore()          - Write to TCP socket        │     │
-│  │                                                                    │     │
-│  │  • <<component>> Message Translator                               │     │
-│  │    ├─ WebSocket ↔ TCP Protocol Translation                       │     │
-│  │    ├─ correlationId Mapping (Request/Response)                   │     │
-│  │    └─ sessionId Routing (Notifications)                          │     │
-│  │                                                                    │     │
-│  │  Technology Stack:                                                 │     │
-│  │  [Spring Boot 3.2] [Spring WebSocket] [TCP Client] [Java 17]    │     │
-│  └────────────────────────────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                       ↓
-                            TCP Socket Connection
-                            localhost:9090
-                            ┌─────────────────────────────────┐
-                            │ Protocol: TCP Socket            │
-                            │ Format: Length-Prefixed JSON    │
-                            │   ├─ 4 bytes: length (int)     │
-                            │   └─ N bytes: JSON payload     │
-                            │ Buffering: BufferedStream       │
-                            │ Heartbeat: PING/PONG (5s)      │
-                            └─────────────────────────────────┘
-                                       ↓
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    BUSINESS LOGIC TIER (Tầng Xử Lý Logic)                   │
-│  ┌────────────────────────────────────────────────────────────────────┐     │
-│  │                Core Server (Java TCP Server)                       │     │
-│  │                        Port: 9090                                  │     │
-│  │                                                                    │     │
-│  │  Components:                                                       │     │
-│  │                                                                    │     │
-│  │  • <<component>> ClientConnectionHandler                          │     │
-│  │    └─ Thread Pool: CachedThreadPool (Worker Pool)                │     │
-│  │       - I/O Thread: Read/Write socket                             │     │
-│  │       - Worker Thread: Process business logic                     │     │
-│  │                                                                    │     │
-│  │  • <<component>> AuthService                                      │     │
-│  │    ├─ register() - Tạo tài khoản, BCrypt hashing                 │     │
-│  │    ├─ login()    - Xác thực, tạo sessionId                       │     │
-│  │    └─ logout()   - Cleanup session                               │     │
-│  │                                                                    │     │
-│  │  • <<component>> SessionManager                                   │     │
-│  │    └─ ConcurrentHashMap<sessionId, SessionContext>               │     │
-│  │       - Track active sessions, online users                       │     │
-│  │       - Auto-cleanup expired sessions                             │     │
-│  │                                                                    │     │
-│  │  • <<component>> GameService                                      │     │
-│  │    ├─ ConcurrentHashMap<matchId, GameState>                      │     │
-│  │    ├─ Lock Striping: Map<matchId, ReentrantLock>                │     │
-│  │    ├─ initializeGame()     - Tạo bộ bài, shuffle                │     │
-│  │    ├─ playCard()           - Xử lý chọn bài (with Lock)         │     │
-│  │    ├─ handleRoundTimeout() - Auto-pick khi hết giờ              │     │
-│  │    └─ finalizeGame()       - Tính winner, lưu DB                │     │
-│  │                                                                    │     │
-│  │  • <<component>> MatchmakingService                               │     │
-│  │    ├─ Queue<userId>: FIFO queue                                  │     │
-│  │    ├─ Set<userId>: Track users in queue                          │     │
-│  │    └─ ScheduledExecutor: tryMatchmaking() every 1s               │     │
-│  │                                                                    │     │
-│  │  • <<component>> ChallengeService                                 │     │
-│  │    ├─ ConcurrentHashMap<challengeId, ChallengeSession>           │     │
-│  │    ├─ createChallenge() - Gửi lời mời 1v1                       │     │
-│  │    ├─ handleResponse() - Accept/Reject                           │     │
-│  │    └─ Timeout: 15 seconds auto-cancel                            │     │
-│  │                                                                    │     │
-│  │  • <<component>> LeaderboardService                               │     │
-│  │    ├─ getTopPlayers()  - Top 20 by score                        │     │
-│  │    ├─ getUserRank()    - Calculate rank for user                │     │
-│  │    └─ getOnlineStatus()- Join with active_sessions              │     │
-│  │                                                                    │     │
-│  │  Technology Stack:                                                 │     │
-│  │  [Java 17] [JDBC] [ExecutorService] [ConcurrentHashMap]         │     │
-│  └────────────────────────────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                       ↓
-                            JDBC Connection Pool
-                            jdbc:mysql://localhost:3306/lucky_card_game
-                            ┌─────────────────────────────────┐
-                            │ Connection Pool: HikariCP       │
-                            │ Max Connections: 10             │
-                            │ Connection Timeout: 30s         │
-                            │ Idle Timeout: 600s              │
-                            │ Max Lifetime: 1800s             │
-                            └─────────────────────────────────┘
-                                       ↓
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       DATA TIER (Tầng Cơ Sở Dữ Liệu)                        │
-│  ┌────────────────────────────────────────────────────────────────────┐     │
-│  │                    MySQL Database (Version 8.0)                    │     │
-│  │                           Port: 3306                               │     │
-│  │                                                                    │     │
-│  │  Tables & Indexes:                                                 │     │
-│  │                                                                    │     │
-│  │  • <<table>> users                                                │     │
-│  │    Columns: user_id, username(UNIQUE), email(UNIQUE), password   │     │
-│  │    Indexes: PRIMARY KEY(user_id), UNIQUE(username), UNIQUE(email)│     │
-│  │    Purpose: Authentication, user credentials                      │     │
-│  │                                                                    │     │
-│  │  • <<table>> user_profiles                                        │     │
-│  │    Columns: user_id, score, games_played, games_won, win_rate    │     │
-│  │    Indexes: PRIMARY KEY(user_id), INDEX(score DESC, games_won)   │     │
-│  │    Purpose: Leaderboard ranking, game statistics                 │     │
-│  │                                                                    │     │
-│  │  • <<table>> active_sessions                                      │     │
-│  │    Columns: session_id, user_id, last_activity_timestamp         │     │
-│  │    Indexes: PRIMARY KEY(session_id), INDEX(user_id)              │     │
-│  │    Purpose: Track online users, session management               │     │
-│  │                                                                    │     │
-│  │  • <<table>> games                                                │     │
-│  │    Columns: match_id, player1_id, player2_id, winner_id, status  │     │
-│  │    Indexes: PRIMARY KEY(match_id), INDEX(player1_id, player2_id) │     │
-│  │    Purpose: Game history, match records                           │     │
-│  │                                                                    │     │
-│  │  • <<table>> game_rounds                                          │     │
-│  │    Columns: round_id, match_id, round_number, player1_card, ...  │     │
-│  │    Indexes: PRIMARY KEY(round_id), FOREIGN KEY(match_id)         │     │
-│  │    Purpose: Detailed round history (3 rounds per game)           │     │
-│  │                                                                    │     │
-│  │  • <<table>> cards                                                │     │
-│  │    Columns: card_id, rank, suit, display_name                    │     │
-│  │    Purpose: 52 cards reference data                              │     │
-│  │                                                                    │     │
-│  │  Storage Engine: InnoDB (ACID transactions, Foreign Keys)         │     │
-│  │  Character Set: utf8mb4 (Emoji support)                           │     │
-│  │  Collation: utf8mb4_unicode_ci                                    │     │
-│  └────────────────────────────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+Tầng giao diện được xây dựng dưới dạng ứng dụng web Single Page Application (SPA) sử dụng React.js phiên bản 18.2. Ứng dụng chạy trên trình duyệt web và giao tiếp với server thông qua giao thức WebSocket tại địa chỉ ws://localhost:8080/ws trong môi trường development (port 5173 với Vite dev server).
 
----
+Các component chính bao gồm AuthView chịu trách nhiệm xử lý đăng ký và đăng nhập, LobbyView quản lý giao diện tìm kiếm trận đấu và bảng xếp hạng, và GameView hiển thị giao diện chơi game với các lá bài. State management được thực hiện thông qua AppContext sử dụng useReducer hook của React để quản lý global state. Custom hook useWebSocket đảm nhiệm việc quản lý kết nối WebSocket với các tính năng tự động reconnect và exponential backoff khi mất kết nối.
 
-## 📊 LUỒNG DỮ LIỆU (DATA FLOW)
+Technology stack của tầng này bao gồm React 18.2 cho UI framework, WebSocket API cho realtime communication, Tailwind CSS cho styling, và Vite làm build tool. Giao thức WebSocket sử dụng format JSON với encoding UTF-8, đảm bảo khả năng tự động kết nối lại khi gặp sự cố.
 
-### 🔄 Request Flow (Client → Server → Database)
+### Tầng Trung Gian (Presentation Tier)
 
-```
-1. User Action (Click button, Select card)
-   ↓
-2. Frontend (React) - Dispatch action, update local state
-   ↓
-3. WebSocket Client - Send JSON message
-   {
-     "type": "GAME.CARD_PLAY_REQUEST",
-     "correlationId": "c-1700123456-abc123",
-     "sessionId": "sess-xyz789",
-     "payload": { "cardId": 5 }
-   }
-   ↓
-4. Gateway - GatewayWebSocketHandler.handleTextMessage()
-   - Parse JSON
-   - Store: pendingRequests.put(correlationId, webSocketSession)
-   - Forward to Core via TCP
-   ↓
-5. Core - ClientConnectionHandler.run()
-   - I/O Thread: Read length-prefixed message
-   - Submit to Worker Pool: pool.submit(() -> processMessage())
-   ↓
-6. Core - GameService.playCard()
-   - Acquire Lock: gameLocks.get(matchId).lock()
-   - Validate card, update GameState
-   - Check if both players played
-   - Release Lock: lock.unlock()
-   ↓
-7. Core - Database Query
-   - INSERT INTO game_rounds (match_id, round_number, player1_card, ...)
-   - UPDATE user_profiles SET score = score + 10 WHERE user_id = ?
-   ↓
-8. Core - Send Response back to Gateway
-   {
-     "type": "GAME.CARD_PLAY_SUCCESS",
-     "correlationId": "c-1700123456-abc123",
-     "sessionId": "sess-xyz789",
-     "payload": { "availableCards": [...] }
-   }
-   ↓
-9. Gateway - Listener Thread receives response
-   - Lookup: webSocketSession = pendingRequests.get(correlationId)
-   - Forward to client via WebSocket
-   ↓
-10. Frontend - useWebSocket.onmessage()
-    - Parse JSON
-    - Dispatch Redux action: CARD_PLAY_SUCCESS
-    - React re-renders with new state
-```
+Gateway Server được xây dựng trên nền tảng Spring Boot 3.2, chạy trên port 8080 và đóng vai trò là cầu nối giữa client và core server. Component GatewayWebSocketHandler xử lý các kết nối WebSocket từ client thông qua ba phương thức chính: afterConnectionEstablished() để xử lý kết nối mới, handleTextMessage() để định tuyến message đến Core server, và afterConnectionClosed() để dọn dẹp tài nguyên khi client ngắt kết nối.
 
-### 🔔 Notification Flow (Server Push)
+CoreTcpClient là component quan trọng thiết lập kết nối TCP đến Core server thông qua phương thức connect(), duy trì một background thread liên tục đọc dữ liệu từ Core qua startListening(), và triển khai cơ chế heartbeat với PING/PONG message mỗi 5 giây để phát hiện kết nối bị đứt. Message Translator đảm nhiệm việc chuyển đổi giao thức giữa WebSocket và TCP, ánh xạ correlationId cho các cặp Request/Response, và routing sessionId cho các notification từ server.
 
-```
-1. Core - GameService detects event (e.g., Both players played)
-   ↓
-2. Core - Send notification to BOTH players
-   {
-     "type": "GAME.ROUND_REVEAL",
-     "sessionId": "sess-player1-xyz",
-     "payload": { 
-       "playerCard": "A♥", 
-       "opponentCard": "K♠",
-       "result": "WIN"
-     }
-   }
-   ↓
-3. Gateway - Listener Thread receives notification
-   - Lookup: webSocketSession = activeClientSessions.get(sessionId)
-   - Forward to client via WebSocket
-   ↓
-4. Frontend - useWebSocket.onmessage()
-   - Dispatch: ROUND_REVEAL action
-   - Show result modal, update scores
-```
+Kết nối giữa Gateway và Core server sử dụng TCP socket trên port 9090 với format Length-Prefixed JSON, trong đó 4 bytes đầu chứa độ dài message (integer) và N bytes tiếp theo chứa JSON payload. Cơ chế buffering với BufferedStream được sử dụng để tối ưu hiệu năng, kết hợp với heartbeat PING/PONG mỗi 5 giây để đảm bảo kết nối luôn ổn định.
 
----
+### Tầng Xử Lý Logic (Business Logic Tier)
 
-## 🔐 BẢO MẬT & XÁC THỰC
+Core Server là nơi tập trung toàn bộ business logic của game, được viết bằng Java 17 và chạy trên port 9090. ClientConnectionHandler sử dụng CachedThreadPool để quản lý thread pool, với I/O Thread chuyên đọc/ghi socket và Worker Thread xử lý business logic.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              Security & Authentication Layer                │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  1. Password Hashing:                                       │
-│     • Algorithm: BCrypt                                     │
-│     • Cost Factor: 10 (2^10 = 1024 rounds)                │
-│     • Salt: Automatically generated per password           │
-│                                                             │
-│  2. Session Management:                                     │
-│     • SessionId: UUID v4 (random, 128-bit)                │
-│     • Storage: active_sessions table + In-memory cache     │
-│     • Expiration: 24 hours (auto-cleanup)                  │
-│     • Validation: Every request checks sessionId validity  │
-│                                                             │
-│  3. SQL Injection Prevention:                               │
-│     • PreparedStatement for all queries                    │
-│     • Input validation & sanitization                      │
-│     • Parameterized queries only                           │
-│                                                             │
-│  4. Input Validation:                                       │
-│     • Username: 3-50 chars, alphanumeric + underscore      │
-│     • Email: RFC 5322 format validation                    │
-│     • Password: Min 6 chars, no max limit                  │
-│     • Card ID: Must be in availableCards list              │
-│                                                             │
-│  5. Authorization:                                          │
-│     • User can only play in their own game                 │
-│     • Cannot access other users' sessions                  │
-│     • Admin operations require special role (future)       │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+AuthService cung cấp các chức năng register() để tạo tài khoản mới với BCrypt hashing, login() thực hiện xác thực và tạo sessionId duy nhất, và logout() để cleanup session khi người dùng đăng xuất. SessionManager sử dụng ConcurrentHashMap để lưu trữ SessionContext theo sessionId, theo dõi active sessions và online users, đồng thời tự động cleanup các session hết hạn.
 
----
+GameService là trái tim của game logic, quản lý trạng thái game thông qua ConcurrentHashMap ánh xạ matchId với GameState. Lock Striping với ReentrantLock được triển khai để đảm bảo thread-safety khi nhiều người chơi đồng thời thao tác. Các phương thức chính bao gồm initializeGame() để tạo và shuffle bộ bài, playCard() xử lý việc người chơi chọn bài với lock mechanism, handleRoundTimeout() tự động chọn bài khi hết giờ, và finalizeGame() tính toán người thắng cuộc và lưu vào database.
 
-## ⚡ HIỆU NĂNG & TỐI ƯU HÓA
+MatchmakingService triển khai hàng đợi FIFO để ghép cặp người chơi, sử dụng Queue để lưu trữ userId và Set để track users đang trong queue. ScheduledExecutor thực thi tryMatchmaking() mỗi giây để tìm kiếm cặp phù hợp. ChallengeService quản lý các thách đấu 1v1 thông qua ConcurrentHashMap lưu trữ ChallengeSession, với các chức năng createChallenge() gửi lời mời, handleResponse() xử lý Accept/Reject, và timeout tự động hủy sau 15 giây.
 
-### 🧵 Threading Model
+LeaderboardService cung cấp getTopPlayers() lấy top 20 người chơi theo điểm, getUserRank() tính toán thứ hạng của người dùng cụ thể, và getOnlineStatus() join với bảng active_sessions để hiển thị trạng thái online.
 
-**Core Server:**
-```
-┌─────────────────────────────────────────────────────┐
-│                  Thread Architecture                │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  Main Thread:                                       │
-│  ├─ CoreServer.main() - Start TCP listener         │
-│  └─ ServerSocket.accept() - Accept connections     │
-│                                                     │
-│  I/O Threads (per connection):                     │
-│  ├─ ClientConnectionHandler.run()                  │
-│  ├─ Read from socket: in.readInt() + in.readFully()│
-│  └─ Write to socket: out.writeInt() + out.write()  │
-│                                                     │
-│  Worker Pool (CachedThreadPool):                   │
-│  ├─ Process business logic (playCard, login, etc.) │
-│  ├─ Database queries (JDBC operations)             │
-│  └─ Auto-scale: Create threads as needed           │
-│                                                     │
-│  Scheduler Threads:                                 │
-│  ├─ MatchmakingService: tryMatchmaking() every 1s  │
-│  ├─ GameService: Round timeout handlers (15s)      │
-│  └─ SessionManager: Cleanup expired sessions       │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-```
+Kết nối giữa Core server và Database sử dụng JDBC Connection Pool với HikariCP, cấu hình tối đa 10 connections, connection timeout 30 giây, idle timeout 600 giây, và max lifetime 1800 giây để đảm bảo hiệu năng tối ưu.
 
-**Gateway Server:**
-```
-┌─────────────────────────────────────────────────────┐
-│              Gateway Thread Architecture            │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  WebSocket Threads:                                 │
-│  ├─ Spring WebSocket Handler (per connection)      │
-│  └─ Async message processing                       │
-│                                                     │
-│  TCP Listener Thread:                               │
-│  ├─ CoreTcpClient.startListening()                 │
-│  └─ Continuous read from Core: in.readInt()        │
-│                                                     │
-│  Heartbeat Thread:                                  │
-│  ├─ CoreTcpClient.startHeartbeat()                 │
-│  └─ PING/PONG every 5 seconds                      │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-```
+### Tầng Cơ Sở Dữ Liệu (Data Tier)
 
-### 🔒 Concurrency Control
+MySQL Database phiên bản 8.0 chạy trên port 3306 là tầng lưu trữ dữ liệu bền vững của hệ thống. Cơ sở dữ liệu bao gồm sáu bảng chính với thiết kế tối ưu cho hiệu năng.
 
-```
-┌─────────────────────────────────────────────────────┐
-│           Concurrency & Synchronization             │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  1. Lock Striping (GameService):                    │
-│     • Map<matchId, ReentrantLock> gameLocks        │
-│     • Each game has its own lock                   │
-│     • Prevent race condition when both play card   │
-│                                                     │
-│  2. ConcurrentHashMap Usage:                        │
-│     • activeGames: Thread-safe game state storage  │
-│     • activeSessions: Thread-safe session tracking │
-│     • pendingRequests: correlationId → client map  │
-│                                                     │
-│  3. Atomic Operations:                              │
-│     • matchmakingQueue: ConcurrentLinkedQueue      │
-│     • usersInQueue: ConcurrentHashMap.newKeySet()  │
-│                                                     │
-│  4. Critical Sections:                              │
-│     playCard() {                                    │
-│       lock.lock();                                  │
-│       try {                                         │
-│         // Update game state                       │
-│         // Check if both played                    │
-│       } finally {                                   │
-│         lock.unlock();                              │
-│       }                                             │
-│     }                                               │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-```
+Bảng users lưu trữ thông tin authentication với các cột user_id, username (UNIQUE), email (UNIQUE), và password đã được hash. Indexes bao gồm PRIMARY KEY trên user_id và UNIQUE constraints trên username và email để đảm bảo tính duy nhất. Bảng user_profiles chứa thông tin thống kê game với các cột user_id, score, games_played, games_won, và win_rate. Index phức hợp trên (score DESC, games_won) được tạo để tối ưu hóa query leaderboard.
 
-### 💾 Database Optimization
+Bảng active_sessions theo dõi người dùng online với session_id làm PRIMARY KEY, user_id, và last_activity_timestamp. Index trên user_id hỗ trợ tra cứu nhanh trạng thái online của người dùng cụ thể. Bảng games ghi lại lịch sử các trận đấu với match_id, player1_id, player2_id, winner_id, và status. Index phức hợp trên (player1_id, player2_id) giúp truy vấn nhanh match history của người chơi.
 
-```
-┌─────────────────────────────────────────────────────┐
-│          Database Performance Tuning                │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  1. Connection Pooling (HikariCP):                  │
-│     • Pool Size: 10 connections                    │
-│     • Formula: (core_count × 2) + effective_spindle│
-│     • Timeout: 30s connection, 600s idle           │
-│                                                     │
-│  2. Indexes:                                        │
-│     • user_profiles(score DESC, games_won DESC)    │
-│       → Fast leaderboard query                     │
-│     • active_sessions(user_id)                     │
-│       → Fast online status lookup                  │
-│     • games(player1_id, player2_id)                │
-│       → Fast match history retrieval               │
-│                                                     │
-│  3. Query Optimization:                             │
-│     • Use JOIN instead of multiple SELECTs         │
-│     • LIMIT for pagination (leaderboard top 20)    │
-│     • Avoid SELECT * (specify columns)             │
-│                                                     │
-│  4. Transaction Management:                         │
-│     • Auto-commit for simple queries               │
-│     • Explicit transaction for game finalization:  │
-│       BEGIN TRANSACTION;                           │
-│         UPDATE user_profiles ...;                  │
-│         INSERT INTO games ...;                     │
-│       COMMIT;                                       │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-```
+Bảng game_rounds lưu trữ chi tiết từng round trong game với round_id, match_id, round_number, player1_card, và các thông tin khác. FOREIGN KEY constraint trên match_id đảm bảo tính toàn vẹn dữ liệu. Bảng cards là reference data chứa 52 lá bài với card_id, rank, suit, và display_name.
 
----
+Database sử dụng Storage Engine InnoDB để hỗ trợ ACID transactions và Foreign Keys. Character set utf8mb4 với collation utf8mb4_unicode_ci được áp dụng để hỗ trợ emoji và các ký tự đặc biệt
 
-## 🚀 TRIỂN KHAI (DEPLOYMENT)
+## LUỒNG DỮ LIỆU (DATA FLOW)
 
-### 📦 Development Environment
+### Luồng Xử Lý Request (Client → Server → Database)
 
-```
-┌─────────────────────────────────────────────────────┐
-│            Local Development Setup                  │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  Frontend (Port 5173):                              │
-│  $ cd frontend                                      │
-│  $ npm install                                      │
-│  $ npm run dev                                      │
-│  → Vite dev server with hot reload                 │
-│                                                     │
-│  Gateway (Port 8080):                               │
-│  $ cd gateway                                       │
-│  $ mvn spring-boot:run                              │
-│  → Spring Boot embedded Tomcat                     │
-│                                                     │
-│  Core (Port 9090):                                  │
-│  $ cd core                                          │
-│  $ mvn compile exec:java                            │
-│  → Pure Java application                           │
-│                                                     │
-│  Database (Port 3306):                              │
-│  $ docker run -d -p 3306:3306 \                    │
-│    -e MYSQL_ROOT_PASSWORD=root \                   │
-│    -e MYSQL_DATABASE=lucky_card_game \             │
-│    mysql:8.0                                        │
-│  $ mysql -u root -p < db/schema.sql                │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-```
+Luồng xử lý request trong hệ thống bắt đầu từ hành động của người dùng như click button hoặc chọn bài. Frontend React sẽ dispatch action và cập nhật local state trước khi gửi message JSON qua WebSocket Client. Message này có cấu trúc bao gồm type (ví dụ GAME.CARD_PLAY_REQUEST), correlationId để tracking request/response, sessionId để định danh người dùng, và payload chứa dữ liệu như cardId.
 
-### 🐳 Production Deployment (Docker Compose)
+Khi Gateway nhận được message tại GatewayWebSocketHandler.handleTextMessage(), nó sẽ parse JSON, lưu trữ ánh xạ correlationId với webSocketSession vào pendingRequests, sau đó forward message đến Core server qua TCP. Core server với ClientConnectionHandler.run() sử dụng I/O Thread để đọc length-prefixed message, sau đó submit task xử lý vào Worker Pool thông qua pool.submit().
 
-```yaml
-version: '3.8'
-services:
-  database:
-    image: mysql:8.0
-    ports:
-      - "3306:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: lucky_card_game
-    volumes:
-      - mysql_data:/var/lib/mysql
-    networks:
-      - backend
+Tại GameService.playCard(), hệ thống sẽ acquire lock cho matchId cụ thể, validate card, cập nhật GameState, kiểm tra xem cả hai người chơi đã chơi bài chưa, rồi release lock. Sau đó Core thực hiện database queries như INSERT vào bảng game_rounds và UPDATE điểm số trong user_profiles.
 
-  core:
-    build: ./core
-    ports:
-      - "9090:9090"
-    environment:
-      DB_HOST: database
-      DB_PORT: 3306
-    depends_on:
-      - database
-    networks:
-      - backend
+Core gửi response trở lại Gateway với type CARD_PLAY_SUCCESS và cùng correlationId ban đầu. Gateway's Listener Thread nhận response, lookup webSocketSession từ pendingRequests dựa trên correlationId, và forward về client qua WebSocket. Cuối cùng, Frontend's useWebSocket.onmessage() parse JSON, dispatch Redux action CARD_PLAY_SUCCESS, và React re-render với state mới.
 
-  gateway:
-    build: ./gateway
-    ports:
-      - "8080:8080"
-    environment:
-      CORE_HOST: core
-      CORE_PORT: 9090
-    depends_on:
-      - core
-    networks:
-      - backend
-      - frontend
+### Luồng Notification (Server Push)
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "80:80"
-    depends_on:
-      - gateway
-    networks:
-      - frontend
+Luồng notification được kích hoạt khi Core server's GameService phát hiện các sự kiện quan trọng như cả hai người chơi đã chơi bài. Core sẽ gửi notification đến cả hai người chơi với type GAME.ROUND_REVEAL, bao gồm sessionId của từng người chơi và payload chứa thông tin như playerCard, opponentCard, và result.
 
-networks:
-  frontend:
-  backend:
+Gateway's Listener Thread nhận notification, lookup webSocketSession từ activeClientSessions dựa trên sessionId, và forward đến client tương ứng qua WebSocket. Frontend's useWebSocket.onmessage() sẽ dispatch ROUND_REVEAL action, hiển thị modal kết quả và cập nhật điểm số trên giao diện
 
-volumes:
-  mysql_data:
-```
+## BẢO MẬT & XÁC THỰC
 
----
+Hệ thống triển khai nhiều lớp bảo mật để đảm bảo tính an toàn cho dữ liệu người dùng và tính toàn vẹn của game. Về mật khẩu, hệ thống sử dụng thuật toán BCrypt với cost factor 10, tương đương 2^10 hay 1024 rounds hashing. Salt được tự động sinh ra cho mỗi mật khẩu, đảm bảo cùng một mật khẩu cũng tạo ra hash khác nhau.
 
-## 📡 GIAO THỨC GIAO TIẾP
+Quản lý session được thực hiện thông qua SessionId dạng UUID v4 với độ dài 128-bit, được lưu trữ cả trong bảng active_sessions của database và in-memory cache để truy xuất nhanh. Session có thời hạn 24 giờ và được tự động cleanup khi hết hạn. Mọi request đều phải validate sessionId để đảm bảo tính hợp lệ trước khi xử lý.
 
-### 🔌 WebSocket Protocol (Client ↔ Gateway)
+Để phòng chống SQL Injection, hệ thống sử dụng PreparedStatement cho tất cả database queries, kết hợp với input validation và sanitization. Chỉ sử dụng parameterized queries, không bao giờ concatenate string trực tiếp vào SQL statement.
 
-```json
-{
-  "type": "DOMAIN.ACTION_MODIFIER",
-  "correlationId": "c-timestamp-random",
-  "sessionId": "sess-uuid",
-  "payload": {
-    // Domain-specific data
-  },
-  "error": {
-    "code": "ERR_CODE",
-    "message": "Human-readable error"
-  }
-}
-```
+Input validation được áp dụng nghiêm ngặt với các quy tắc cụ thể: Username phải có từ 3 đến 50 ký tự, chỉ chấp nhận alphanumeric và underscore; Email phải tuân thủ RFC 5322 format; Password tối thiểu 6 ký tự không giới hạn tối đa; Card ID phải nằm trong danh sách availableCards của người chơi.
 
-**Message Types:**
-- `AUTH.*` → Authentication (LOGIN, REGISTER, LOGOUT)
-- `LOBBY.*` → Matchmaking & Leaderboard
-- `GAME.*` → Game logic (START, PLAY_CARD, END)
-- `SYSTEM.*` → Heartbeat, Errors
+Authorization được kiểm tra kỹ lưỡng để đảm bảo người dùng chỉ có thể tham gia vào game của chính họ, không thể truy cập session của người dùng khác. Các admin operations sẽ yêu cầu special role trong tương lai khi mở rộng hệ thống
 
-### 🔗 TCP Protocol (Gateway ↔ Core)
+## HIỆU NĂNG & TỐI ƯU HÓA
 
-**Length-Prefixed Framing:**
-```
-┌──────────────┬─────────────────────────────────────┐
-│  4 bytes     │          N bytes                    │
-├──────────────┼─────────────────────────────────────┤
-│  Length (N)  │  JSON Payload (UTF-8 encoded)       │
-└──────────────┴─────────────────────────────────────┘
-```
+### Mô Hình Threading
 
-**Java Implementation:**
-```java
-// Write
-byte[] jsonBytes = jsonMessage.getBytes(StandardCharsets.UTF_8);
-out.writeInt(jsonBytes.length);  // 4 bytes
-out.write(jsonBytes);             // N bytes
-out.flush();
+Core Server triển khai kiến trúc đa luồng phức tạp để tối đa hóa hiệu năng. Main Thread chịu trách nhiệm khởi động TCP listener thông qua CoreServer.main() và chấp nhận connections mới qua ServerSocket.accept(). Mỗi connection được xử lý bởi một I/O Thread riêng trong ClientConnectionHandler.run(), đảm nhiệm việc đọc dữ liệu từ socket với in.readInt() và in.readFully(), cũng như ghi dữ liệu ra socket với out.writeInt() và out.write().
 
-// Read
-int length = in.readInt();        // 4 bytes
-byte[] buffer = new byte[length];
-in.readFully(buffer);             // N bytes
-String json = new String(buffer, StandardCharsets.UTF_8);
-```
+Worker Pool được cấu hình dạng CachedThreadPool, xử lý business logic như playCard, login, và các database queries thông qua JDBC operations. Pool này tự động scale, tạo threads mới khi cần thiết để đáp ứng workload. Scheduler Threads được sử dụng cho các tác vụ định kỳ như MatchmakingService gọi tryMatchmaking() mỗi giây, GameService xử lý round timeout sau 15 giây, và SessionManager cleanup các expired sessions.
 
----
+Gateway Server cũng sử dụng kiến trúc multi-threading với WebSocket Threads quản lý mỗi connection thông qua Spring WebSocket Handler và xử lý message bất đồng bộ. TCP Listener Thread được khởi tạo bởi CoreTcpClient.startListening() để liên tục đọc dữ liệu từ Core server. Heartbeat Thread chạy CoreTcpClient.startHeartbeat() để gửi PING/PONG mỗi 5 giây, đảm bảo kết nối luôn hoạt động.
 
-## 🔄 XỬ LÝ LỖI & RECOVERY
+### Kiểm Soát Concurrency
 
-```
-┌─────────────────────────────────────────────────────┐
-│           Error Handling & Recovery                 │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  1. Client Disconnect (Normal):                     │
-│     • WebSocket onClose → Gateway cleanup          │
-│     • Gateway → Core: AUTH.LOGOUT_REQUEST          │
-│     • Core → SessionManager.removeSession()        │
-│     • If in game → Opponent wins (forfeit)         │
-│                                                     │
-│  2. Client Disconnect (Crash):                      │
-│     • WebSocket onClose → Gateway detect           │
-│     • No response to PING → Connection dead        │
-│     • Auto-logout after 30s inactivity             │
-│     • Opponent notified: GAME.OPPONENT_LEFT        │
-│                                                     │
-│  3. Gateway Crash:                                  │
-│     • Core detects: IOException on socket read     │
-│     • Close ClientConnectionHandler                │
-│     • Cleanup all sessions from crashed Gateway    │
-│     • All users disconnected → Need reconnect      │
-│                                                     │
-│  4. Core Crash:                                     │
-│     • Gateway detects: IOException on TCP read     │
-│     • Gateway attempts reconnect (Exponential)     │
-│     • Clients see "Connection lost" message        │
-│     • Game state lost (not persisted mid-game)     │
-│                                                     │
-│  5. Database Connection Lost:                       │
-│     • HikariCP auto-retry with backoff             │
-│     • If retry fails → Return SYSTEM.ERROR         │
-│     • Log error for investigation                  │
-│                                                     │
-│  6. Deadlock Prevention:                            │
-│     • SYSTEM.WELCOME sent immediately on connect   │
-│     • Heartbeat PING/PONG keeps connection alive   │
-│     • Timeout for all blocking operations          │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-```
+Hệ thống sử dụng kỹ thuật Lock Striping trong GameService thông qua Map ánh xạ matchId với ReentrantLock. Mỗi game có lock riêng, ngăn chặn race condition khi cả hai người chơi đồng thời chơi bài. ConcurrentHashMap được sử dụng rộng rãi cho thread-safe storage của activeGames, activeSessions, và pendingRequests (ánh xạ correlationId với client).
 
----
+Các atomic operations được triển khai với matchmakingQueue sử dụng ConcurrentLinkedQueue và usersInQueue sử dụng ConcurrentHashMap.newKeySet(). Critical sections như playCard() được bảo vệ bởi lock pattern: lock.lock() trước khi update game state và check if both played, sau đó đảm bảo lock.unlock() trong finally block để tránh deadlock.
 
-## 📊 MONITORING & LOGGING
+### Tối Ưu Hóa Database
 
-```
-┌─────────────────────────────────────────────────────┐
-│         Observability & Logging Strategy            │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  Console Logs (Development):                        │
-│  • Connection events: "Client X connected"         │
-│  • Message routing: "Received: GAME.PLAY_CARD"     │
-│  • Error traces: "Failed to parse JSON: ..."       │
-│                                                     │
-│  Metrics to Track (Production):                     │
-│  • Active connections: WebSocket + TCP             │
-│  • Games in progress: activeGames.size()           │
-│  • Matchmaking queue length: queue.size()          │
-│  • Database query time: HikariCP metrics           │
-│  • Message throughput: messages/second             │
-│                                                     │
-│  Health Checks:                                     │
-│  • /health endpoint → Gateway status               │
-│  • Database ping → Connection pool health          │
-│  • Core TCP ping → Heartbeat status                │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-```
+Connection pooling được triển khai với HikariCP, cấu hình pool size là 10 connections theo công thức (core_count × 2) + effective_spindle_count. Connection timeout được đặt ở 30 giây và idle timeout là 600 giây để cân bằng giữa hiệu năng và resource usage.
 
----
+Indexes được thiết kế tối ưu cho các query phổ biến. Index phức hợp trên user_profiles(score DESC, games_won DESC) tăng tốc độ query leaderboard, index trên active_sessions(user_id) giúp tra cứu nhanh online status, và index trên games(player1_id, player2_id) hỗ trợ retrieval match history hiệu quả.
 
-## 🎯 KẾT LUẬN
+Query optimization được thực hiện bằng cách sử dụng JOIN thay vì multiple SELECTs riêng lẻ, áp dụng LIMIT cho pagination như lấy top 20 trong leaderboard, và luôn specify columns cụ thể thay vì SELECT *. Transaction management được quản lý với auto-commit cho simple queries và explicit transaction cho game finalization, bao gồm BEGIN TRANSACTION, UPDATE user_profiles, INSERT INTO games, rồi COMMIT để đảm bảo tính atomic
 
-Kiến trúc 4 tầng này mang lại:
+## TRIỂN KHAI (DEPLOYMENT)
 
-✅ **Tách biệt trách nhiệm rõ ràng** - Mỗi tầng có nhiệm vụ riêng  
-✅ **Dễ bảo trì & mở rộng** - Có thể thay đổi từng tầng độc lập  
-✅ **Hiệu năng cao** - WebSocket + TCP + Connection pooling  
-✅ **Bảo mật tốt** - Core không expose, authentication tập trung  
-✅ **Xử lý lỗi tốt** - Graceful degradation, auto-recovery  
-✅ **Realtime experience** - WebSocket push notifications  
+### Môi Trường Development
 
-Hệ thống sẵn sàng cho:
-- 📈 Horizontal scaling (thêm nhiều Core servers)
-- 🔄 Load balancing ở Gateway tier
-- 💾 Database replication/sharding
-- 📊 Monitoring & analytics integration
+Môi trường development được thiết lập trên local machine với bốn components chạy song song. Frontend chạy trên port 5173, được khởi động bằng lệnh npm install để cài đặt dependencies, sau đó npm run dev để start Vite dev server với tính năng hot reload, giúp developer thấy ngay các thay đổi mà không cần refresh browser.
+
+Gateway chạy trên port 8080 với Spring Boot embedded Tomcat, được khởi động bằng lệnh mvn spring-boot:run từ thư mục gateway. Core server chạy trên port 9090 như một pure Java application, được compile và execute thông qua mvn compile exec:java từ thư mục core.
+
+Database MySQL 8.0 chạy trên port 3306, có thể được khởi động nhanh chóng bằng Docker với lệnh docker run, truyền environment variables MYSQL_ROOT_PASSWORD và MYSQL_DATABASE. Schema được import bằng lệnh mysql -u root -p < db/schema.sql sau khi container đã chạy.
+
+### Triển Khai Production
+
+Môi trường production sử dụng Docker Compose để orchestrate tất cả services. File docker-compose.yml phiên bản 3.8 định nghĩa bốn services chính: database, core, gateway, và frontend.
+
+Database service sử dụng image mysql:8.0, expose port 3306, nhận password từ environment variable ${DB_PASSWORD} để tăng tính bảo mật. Volume mysql_data được mount vào /var/lib/mysql để persist data ngay cả khi container restart. Service này kết nối với backend network.
+
+Core service được build từ thư mục ./core, expose port 9090, và nhận DB_HOST cùng DB_PORT qua environment variables. Service này phụ thuộc vào database (depends_on) nên chỉ start sau khi database đã ready, và cũng kết nối với backend network.
+
+Gateway service được build từ ./gateway, expose port 8080, nhận CORE_HOST và CORE_PORT để kết nối với Core server. Nó phụ thuộc vào core service và kết nối với cả backend và frontend networks, đóng vai trò cầu nối giữa hai tầng.
+
+Frontend service được build từ ./frontend, expose port 80 (HTTP standard port), phụ thuộc vào gateway, và chỉ kết nối với frontend network. Hai networks frontend và backend được tách biệt để tăng cường bảo mật, đảm bảo frontend không thể truy cập trực tiếp vào core hay database
+
+## GIAO THỨC GIAO TIẾP
+
+### Giao Thức WebSocket (Client ↔ Gateway)
+
+Giao tiếp giữa Client và Gateway sử dụng WebSocket protocol với format JSON. Mỗi message có cấu trúc chuẩn bao gồm trường type theo format DOMAIN.ACTION_MODIFIER để phân loại message, correlationId dạng c-timestamp-random để tracking request/response pairs, sessionId dạng sess-uuid để định danh người dùng, payload chứa dữ liệu cụ thể theo domain, và error object với code và message khi có lỗi xảy ra.
+
+Các loại message được phân chia theo domain: AUTH.* cho authentication bao gồm LOGIN, REGISTER, LOGOUT; LOBBY.* cho matchmaking và leaderboard; GAME.* cho game logic như START, PLAY_CARD, END; và SYSTEM.* cho heartbeat và error handling.
+
+### Giao Thức TCP (Gateway ↔ Core)
+
+Giao tiếp giữa Gateway và Core server sử dụng TCP socket với Length-Prefixed Framing protocol. Mỗi message bắt đầu bằng 4 bytes chứa integer N đại diện cho độ dài của JSON payload, theo sau là N bytes chứa JSON data được encode bằng UTF-8.
+
+Việc implement trong Java được thực hiện đơn giản với thao tác write: convert JSON message thành byte array với UTF-8 encoding, gọi out.writeInt() để ghi 4 bytes length header, sau đó out.write() để ghi N bytes payload, và cuối cùng out.flush() để đảm bảo data được gửi ngay lập tức. Thao tác read thực hiện ngược lại: in.readInt() để đọc 4 bytes length, tạo buffer với size tương ứng, in.readFully() để đọc đủ N bytes vào buffer, và convert buffer thành String với UTF-8 encoding. Cơ chế length-prefixed này giải quyết vấn đề message boundary trong TCP stream, đảm bảo mỗi message được đọc đầy đủ và chính xác
+
+## XỬ LÝ LỖI & RECOVERY
+
+Hệ thống được thiết kế để xử lý gracefully nhiều kịch bản lỗi khác nhau. Khi client disconnect bình thường, WebSocket onClose event trigger Gateway cleanup, Gateway gửi AUTH.LOGOUT_REQUEST đến Core, Core gọi SessionManager.removeSession() để cleanup session. Nếu người dùng đang trong game, đối thủ sẽ thắng do forfeit.
+
+Trường hợp client crash đột ngột, Gateway phát hiện qua WebSocket onClose hoặc không nhận được response cho PING message. Sau 30 giây inactivity, hệ thống tự động logout và gửi notification GAME.OPPONENT_LEFT cho đối thủ nếu đang trong game.
+
+Khi Gateway crash, Core server phát hiện IOException khi đọc socket, đóng ClientConnectionHandler tương ứng, và cleanup tất cả sessions từ Gateway bị crash. Tất cả users kết nối qua Gateway đó sẽ bị disconnect và cần reconnect qua Gateway khác hoặc chờ Gateway restart.
+
+Nếu Core crash, Gateway phát hiện IOException khi đọc TCP socket và tự động thử reconnect với exponential backoff strategy. Clients sẽ thấy message "Connection lost" trên giao diện. Game state đang chơi dở sẽ bị mất do chưa được persist vào database.
+
+Khi mất kết nối database, HikariCP connection pool tự động retry với backoff mechanism. Nếu retry thất bại sau nhiều lần thử, hệ thống sẽ return SYSTEM.ERROR cho client và log error để investigation.
+
+Deadlock prevention được triển khai thông qua nhiều cơ chế: SYSTEM.WELCOME được gửi ngay lập tức khi client kết nối để establish connection state, heartbeat PING/PONG liên tục duy trì connection alive, và timeout được đặt cho tất cả blocking operations để tránh thread bị block vô thời hạn
+
+## MONITORING & LOGGING
+
+Hệ thống triển khai chiến lược observability và logging toàn diện. Trong môi trường development, console logs được sử dụng để track connection events như "Client X connected", message routing với log "Received: GAME.PLAY_CARD", và error traces chi tiết như "Failed to parse JSON: ..." để hỗ trợ debugging.
+
+Trong môi trường production, các metrics quan trọng cần được track bao gồm số lượng active connections cho cả WebSocket và TCP, số games đang diễn ra thông qua activeGames.size(), độ dài matchmaking queue qua queue.size(), thời gian database query từ HikariCP metrics, và message throughput tính bằng messages per second.
+
+Health checks được implement ở nhiều mức: endpoint /health cho Gateway status, database ping để kiểm tra connection pool health, và Core TCP ping thông qua heartbeat status. Các health checks này giúp phát hiện sớm các vấn đề và trigger alerts khi cần thiết.
+
+## KẾT LUẬN
+
+Kiến trúc 4 tầng phân tán được triển khai cho hệ thống Game Rút Bài May Mắn mang lại nhiều lợi ích quan trọng. Tách biệt trách nhiệm rõ ràng giữa các tầng giúp mỗi component có nhiệm vụ riêng biệt và không phụ thuộc chặt chẽ vào nhau. Điều này dẫn đến khả năng bảo trì và mở rộng tốt hơn, cho phép thay đổi hoặc scale từng tầng một cách độc lập mà không ảnh hưởng đến toàn bộ hệ thống.
+
+Hiệu năng cao được đạt được thông qua việc kết hợp WebSocket cho realtime communication, TCP socket với length-prefixed framing cho throughput cao, và connection pooling với thread pooling để tối ưu hóa resource usage. Bảo mật được đảm bảo khi Core server không expose trực tiếp ra internet, với Gateway đóng vai trò reverse proxy và authentication/authorization được tập trung xử lý.
+
+Khả năng xử lý lỗi tốt với graceful degradation và auto-recovery mechanism giúp hệ thống duy trì hoạt động ngay cả khi gặp sự cố. WebSocket push notifications mang lại realtime experience mượt mà cho người chơi.
+
+Hệ thống đã sẵn sàng cho các bước mở rộng tiếp theo như horizontal scaling bằng cách thêm nhiều Core servers, triển khai load balancing ở Gateway tier để phân phối traffic, database replication hoặc sharding để tăng capacity, và tích hợp monitoring cùng analytics tools để có cái nhìn sâu hơn về performance và user behavior

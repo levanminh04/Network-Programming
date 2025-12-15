@@ -38,7 +38,6 @@ public final class CoreServer {
         var authService = new AuthService(dbManager);
         var leaderboardService = new LeaderboardService(dbManager, sessionManager);
         var matchmakingService = new MatchmakingService(gameService, sessionManager, activeConnections, scheduler);
-        var challengeService = new ChallengeService(sessionManager, matchmakingService, activeConnections, scheduler);
 
         // Khởi tạo ChallengeService
         var challengeService = new ChallengeService(sessionManager, matchmakingService, activeConnections, scheduler);
